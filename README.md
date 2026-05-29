@@ -7,13 +7,13 @@ Full-stack analytics platform for Creality K2 printers running Klipper/Moonraker
 One-command install on any fresh Linux system (Ubuntu, Debian, CentOS, Rocky, Arch, etc.):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/clint456/k2-printer-analytics/main/install/master.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/GhostyAUS/k2-printer-analytics/main/install/master.sh | sudo bash
 ```
 
 Or clone and run:
 
 ```bash
-git clone https://github.com/clint456/k2-printer-analytics.git
+git clone https://github.com/GhostyAUS/k2-printer-analytics.git
 cd k2-printer-analytics
 sudo ./install/master.sh --moonraker-host 192.168.1.146
 ```

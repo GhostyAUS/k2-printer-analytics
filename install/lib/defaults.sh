@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 INSTALL_VERSION="1.0.0"
 
-REPO_URL="${REPO_URL:-https://github.com/clint456/k2-printer-analytics.git}"
+REPO_URL="${REPO_URL:-https://github.com/GhostyAUS/k2-printer-analytics.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/k2-analytics}"
 
