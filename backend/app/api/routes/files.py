@@ -226,8 +226,14 @@ async def get_file_thumbnail(request: Request, db: Session = Depends(get_db), fi
 
 
 @router.get("/thumbnail-image")
-async def get_thumbnail_image(request: Request, db: Session = Depends(get_db), filename: str = Query(...)):
+async def get_thumbnail_image(request: Request, db: Session = Depends(get_db), filename: str = Query(...), token: str = Query(None)):
     """Proxy thumbnail image for a gcode file. Returns PNG directly or 404."""
+    if token:
+        from app.core.auth import verify_token
+        payload = verify_token(token)
+        if not payload:
+            return Response(status_code=401, content=b"Invalid token")
+
     session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
 
@@ -243,3 +249,38 @@ async def get_thumbnail_image(request: Request, db: Session = Depends(get_db), f
         return Response(content=img_bytes, media_type="image/png")
 
     return Response(status_code=404, content=b"Not found")
+
+
+@router.post("/thumbnail-backfill")
+async def thumbnail_backfill(request: Request, db: Session = Depends(get_db), limit: int = Query(100, ge=1, le=500)):
+    """Extract and save thumbnails for jobs that don't have one yet."""
+    from app.models.print_job import PrintJob
+    session = await _get_session(request)
+    moonraker_url = _get_moonraker_url(db)
+
+    jobs = db.query(PrintJob).filter(PrintJob.thumbnail_path.is_(None)).order_by(PrintJob.id.desc()).limit(limit).all()
+    updated = 0
+    failed = 0
+
+    for job in jobs:
+        try:
+            thumb_url = await _find_thumbnail_path(session, moonraker_url, job.filename)
+            if thumb_url:
+                job.thumbnail_path = thumb_url
+                updated += 1
+                continue
+
+            img_bytes = await _extract_gcode_thumbnail(session, moonraker_url, job.filename)
+            if img_bytes:
+                b64 = base64.b64encode(img_bytes).decode("ascii")
+                job.thumbnail_path = f"data:image/png;base64,{b64}"
+                updated += 1
+                continue
+
+            failed += 1
+        except Exception as e:
+            logger.warning(f"Backfill failed for job {job.id}: {e}")
+            failed += 1
+
+    db.commit()
+    return {"updated": updated, "failed": failed, "skipped": len(jobs) - updated - failed, "checked": len(jobs)}

@@ -33,7 +33,7 @@ class PrintJob(BaseModel):
     electricity_cost = Column(Float, nullable=True)
     filament_cost = Column(Float, nullable=True)
     
-    thumbnail_path = Column(String(512), nullable=True)
+    thumbnail_path = Column(String, nullable=True)
 
     # Foreign key to spool
     spool_id = Column(Integer, ForeignKey("spools.id"), nullable=True)

@@ -349,36 +349,36 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="card">
-            <div className="card-header"><h2 className="text-sm font-semibold text-white">Recent Jobs</h2></div>
-            <div className="card-body p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-surface-700/50 text-xs text-surface-500"><th className="text-left px-4 py-3 font-medium">File</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Duration</th><th className="text-right px-4 py-3 font-medium">Cost</th></tr></thead>
-                  <tbody>
-                    {jobs.slice(0, 8).map(job => (
-                      <tr key={job.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 max-w-[180px]">
-                            <ThumbnailImg
-                              src={job.thumbnail_path || getThumbnailUrl(job.filename)}
-                              size="xs"
-                            />
-                            <span className="text-surface-300 truncate">{job.filename}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`badge-${job.status === 'COMPLETE' ? 'success' : job.status === 'PRINTING' ? 'info' : job.status === 'CANCELLED' ? 'warning' : job.status === 'FAILED' ? 'danger' : 'neutral'}`}>{job.status}</span>
-                        </td>
-                        <td className="px-4 py-3 text-surface-400">{job.actual_duration_seconds ? `${Math.round(job.actual_duration_seconds / 60)} min` : '—'}</td>
-                        <td className="px-4 py-3 text-right text-surface-300 font-medium">{(job.filament_cost || job.electricity_cost) ? `$${((job.filament_cost || 0) + (job.electricity_cost || 0)).toFixed(2)}` : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+      <div className="card">
+        <div className="card-header"><h2 className="text-sm font-semibold text-white">Recent Jobs</h2></div>
+        <div className="card-body p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-surface-700/50 text-xs text-surface-500"><th className="text-left px-4 py-3 font-medium">File</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Duration</th><th className="text-right px-4 py-3 font-medium">Cost</th></tr></thead>
+              <tbody>
+                {jobs.slice(0, 8).map(job => (
+                  <tr key={job.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <ThumbnailImg
+                          src={job.thumbnail_path || getThumbnailUrl(job.filename)}
+                          size="sm"
+                        />
+                        <span className="text-surface-300 truncate max-w-[300px]" title={job.filename}>{job.filename}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`badge-${job.status === 'COMPLETE' ? 'success' : job.status === 'PRINTING' ? 'info' : job.status === 'CANCELLED' ? 'warning' : job.status === 'FAILED' ? 'danger' : 'neutral'}`}>{job.status}</span>
+                    </td>
+                    <td className="px-4 py-3 text-surface-400">{job.actual_duration_seconds ? `${Math.round(job.actual_duration_seconds / 60)} min` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-surface-300 font-medium">{(job.filament_cost || job.electricity_cost) ? `$${((job.filament_cost || 0) + (job.electricity_cost || 0)).toFixed(2)}` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

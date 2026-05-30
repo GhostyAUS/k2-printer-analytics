@@ -373,7 +373,13 @@ export function getExportLogsUrl(): string {
 
 export function getThumbnailUrl(filename: string): string {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  return `${base}/api/v1/files/thumbnail-image?filename=${encodeURIComponent(filename)}`
+  const token = localStorage.getItem('k2_token') || ''
+  return `${base}/api/v1/files/thumbnail-image?filename=${encodeURIComponent(filename)}&token=${encodeURIComponent(token)}`
+}
+
+export async function thumbnailBackfill(limit: number = 100): Promise<{ updated: number; failed: number; checked: number }> {
+  const { data } = await api.post('/api/v1/files/thumbnail-backfill', null, { params: { limit } })
+  return data
 }
 
 export default api
