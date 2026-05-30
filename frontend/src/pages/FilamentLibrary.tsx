@@ -2,41 +2,51 @@ import React, { useEffect, useState } from 'react'
 import { fetchFilamentRolls, createFilamentRoll, updateFilamentRoll, deleteFilamentRoll } from '../api'
 import type { FilamentRoll } from '../types'
 
-const MATERIALS = ['PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'NYLON', 'PC', 'HIPS']
+const MATERIALS = ['PLA', 'PLA+', 'PETG', 'ABS', 'ASA', 'TPU', 'NYLON', 'PC', 'HIPS', 'PVA', 'CUSTOM']
+const MATERIAL_COLORS: Record<string, string> = {
+  'PLA': '#4ade80', 'PLA+': '#22c55e', 'PETG': '#60a5fa', 'ABS': '#f97316',
+  'ASA': '#fb923c', 'TPU': '#c084fc', 'NYLON': '#94a3b8', 'PC': '#e2e8f0',
+  'HIPS': '#fbbf24', 'PVA': '#a3e635', 'CUSTOM': '#6b7280',
+}
 
-type SortKey = 'brand' | 'material' | 'remaining_weight_g' | 'cost_per_kg' | 'total_weight_g' | 'pct_remaining'
+function pctRemaining(roll: FilamentRoll): number {
+  if (!roll.total_weight_g) return 0
+  return Math.min(Math.round((roll.remaining_weight_g / roll.total_weight_g) * 100), 100)
+}
 
-function compareRolls(a: FilamentRoll, b: FilamentRoll, key: SortKey, asc: boolean): number {
-  let cmp = 0
-  switch (key) {
-    case 'brand': cmp = (a.brand || '').localeCompare(b.brand || ''); break
-    case 'material': cmp = a.material.localeCompare(b.material); break
-    case 'remaining_weight_g': cmp = a.remaining_weight_g - b.remaining_weight_g; break
-    case 'cost_per_kg': cmp = (a.cost_per_kg || 0) - (b.cost_per_kg || 0); break
-    case 'total_weight_g': cmp = a.total_weight_g - b.total_weight_g; break
-    case 'pct_remaining': cmp = (a.remaining_weight_g / (a.total_weight_g || 1)) - (b.remaining_weight_g / (b.total_weight_g || 1)); break
-  }
-  return asc ? cmp : -cmp
+function pctColor(pct: number): string {
+  if (pct > 50) return '#4ade80'
+  if (pct > 20) return '#fbbf24'
+  return '#ef4444'
+}
+
+function ProgressArc({ pct, size = 64, strokeWidth = 5 }: { pct: number; size?: number; strokeWidth?: number }) {
+  const r = (size - strokeWidth) / 2
+  const circ = 2 * Math.PI * r
+  const offset = circ - (pct / 100) * circ
+  return (
+    <svg width={size} height={size} className="transform -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth={strokeWidth} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={pctColor(pct)} strokeWidth={strokeWidth}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-500" />
+    </svg>
+  )
 }
 
 const FilamentLibrary: React.FC = () => {
   const [rolls, setRolls] = useState<FilamentRoll[]>([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<number | null>(null)
+  const [editing, setEditing] = useState<FilamentRoll | null>(null)
   const [adding, setAdding] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>('pct_remaining')
-  const [sortAsc, setSortAsc] = useState(false)
   const [materialFilter, setMaterialFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
+  const [view, setView] = useState<'grid' | 'table'>('grid')
 
   useEffect(() => {
-    fetchFilamentRolls()
-      .then(setRolls)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    fetchFilamentRolls().then(setRolls).catch(console.error).finally(() => setLoading(false))
   }, [])
 
-  const sorted = rolls
+  const filtered = rolls
     .filter(r => {
       if (materialFilter !== 'all' && r.material !== materialFilter) return false
       if (search) {
@@ -48,20 +58,14 @@ const FilamentLibrary: React.FC = () => {
       }
       return true
     })
-    .sort((a, b) => compareRolls(a, b, sortKey, sortAsc))
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(a => !a)
-    else { setSortKey(key); setSortAsc(false) }
-  }
-
-  const sortIcon = (key: SortKey) => sortKey === key ? (sortAsc ? '↑' : '↓') : '↕'
+    .sort((a, b) => pctRemaining(b) - pctRemaining(a))
 
   const totalKg = rolls.reduce((s, r) => s + r.total_weight_g, 0) / 1000
   const remainingKg = rolls.reduce((s, r) => s + r.remaining_weight_g, 0) / 1000
   const totalSpent = rolls.reduce((s, r) => s + (r.cost_per_kg || 0) * r.total_weight_g / 1000, 0)
   const avgCostPerKg = totalKg > 0 ? totalSpent / totalKg : 0
   const uniqueMaterials = [...new Set(rolls.map(r => r.material))].sort()
+  const lowStock = rolls.filter(r => pctRemaining(r) < 20).length
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -74,168 +78,242 @@ const FilamentLibrary: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Filament Library</h1>
-          <p className="text-sm text-surface-400 mt-1">{rolls.length} rolls in stock</p>
+          <p className="text-sm text-surface-400 mt-1">{rolls.length} rolls &middot; {remainingKg.toFixed(1)} kg remaining</p>
         </div>
-        <button
-          onClick={() => setAdding(true)}
-          className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors"
-        >+ Add Roll</button>
+        <button onClick={() => { setAdding(true); setEditing(null) }}
+          className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+          Add Spool
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Total Rolls</span>
-          <p className="stat-value">{rolls.length}</p>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="card"><div className="card-body py-3">
+          <span className="text-[10px] uppercase tracking-wider text-surface-500">Total Rolls</span>
+          <p className="text-xl font-bold text-white mt-1">{rolls.length}</p>
         </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Total Stock</span>
-          <p className="stat-value text-sky-400">{totalKg.toFixed(1)} kg</p>
+        <div className="card"><div className="card-body py-3">
+          <span className="text-[10px] uppercase tracking-wider text-surface-500">Total Stock</span>
+          <p className="text-xl font-bold text-sky-400 mt-1">{totalKg.toFixed(1)} kg</p>
         </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Remaining</span>
-          <p className="stat-value text-emerald-400">{remainingKg.toFixed(1)} kg</p>
+        <div className="card"><div className="card-body py-3">
+          <span className="text-[10px] uppercase tracking-wider text-surface-500">Remaining</span>
+          <p className="text-xl font-bold text-emerald-400 mt-1">{remainingKg.toFixed(1)} kg</p>
         </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Avg Cost</span>
-          <p className="stat-value text-amber-400">${avgCostPerKg.toFixed(2)}/kg</p>
+        <div className="card"><div className="card-body py-3">
+          <span className="text-[10px] uppercase tracking-wider text-surface-500">Avg Cost</span>
+          <p className="text-xl font-bold text-amber-400 mt-1">${avgCostPerKg.toFixed(2)}<span className="text-xs font-normal text-surface-500">/kg</span></p>
+        </div></div>
+        <div className="card"><div className="card-body py-3">
+          <span className="text-[10px] uppercase tracking-wider text-surface-500">Low Stock</span>
+          <p className={`text-xl font-bold mt-1 ${lowStock > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{lowStock} <span className="text-xs font-normal text-surface-500">rolls</span></p>
         </div></div>
       </div>
 
-      {adding && (
-        <RollForm
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <select value={materialFilter} onChange={e => setMaterialFilter(e.target.value)}
+            className="bg-surface-800 border border-surface-700 rounded-lg px-3 py-1.5 text-sm text-surface-300 focus:outline-none focus:border-accent-500">
+            <option value="all">All Materials</option>
+            {uniqueMaterials.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <div className="relative">
+            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search spools..."
+              className="bg-surface-800 border border-surface-700 rounded-lg pl-9 pr-3 py-1.5 text-sm text-surface-300 placeholder-surface-500 focus:outline-none focus:border-accent-500 w-48" />
+          </div>
+        </div>
+        <div className="flex items-center gap-1 bg-surface-800 rounded-lg p-0.5">
+          <button onClick={() => setView('grid')}
+            className={`p-1.5 rounded-md transition-colors ${view === 'grid' ? 'bg-surface-700 text-white' : 'text-surface-500 hover:text-surface-300'}`}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+            </svg>
+          </button>
+          <button onClick={() => setView('table')}
+            className={`p-1.5 rounded-md transition-colors ${view === 'table' ? 'bg-surface-700 text-white' : 'text-surface-500 hover:text-surface-300'}`}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m17.25 0v1.5c0 .621-.504 1.125-1.125 1.125m0 0h-7.5m7.5 0h-7.5m0 0V7.5m0 0V5.625" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {(adding || editing) && (
+        <SpoolForm
+          roll={editing}
           onSave={async (data) => {
-            const roll = await createFilamentRoll(data)
-            setRolls(prev => [roll, ...prev])
-            setAdding(false)
+            if (editing) {
+              const updated = await updateFilamentRoll(editing.id, data)
+              setRolls(prev => prev.map(r => r.id === editing.id ? updated : r))
+            } else {
+              const roll = await createFilamentRoll(data)
+              setRolls(prev => [roll, ...prev])
+            }
+            setAdding(false); setEditing(null)
           }}
-          onCancel={() => setAdding(false)}
+          onCancel={() => { setAdding(false); setEditing(null) }}
+          onDelete={editing ? async () => {
+            await deleteFilamentRoll(editing.id)
+            setRolls(prev => prev.filter(r => r.id !== editing.id))
+            setEditing(null)
+          } : undefined}
         />
       )}
 
-      <div className="card">
-        <div className="card-header flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Inventory</h2>
-          <div className="flex items-center gap-3">
-            <select
-              value={materialFilter}
-              onChange={e => setMaterialFilter(e.target.value)}
-              className="bg-surface-800 border border-surface-700 rounded px-2 py-1 text-xs text-surface-300 focus:outline-none focus:border-accent-500"
-            >
-              <option value="all">All Materials</option>
-              {uniqueMaterials.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="bg-surface-800 border border-surface-700 rounded px-2 py-1 text-xs text-surface-300 placeholder-surface-500 focus:outline-none focus:border-accent-500 w-36"
-            />
-            <span className="text-xs text-surface-500">{sorted.length} rolls</span>
-          </div>
+      {view === 'grid' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map(roll => (
+            <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false) }} />
+          ))}
+          {filtered.length === 0 && (
+            <div className="col-span-full text-center py-12 text-surface-500">
+              <svg className="w-12 h-12 mx-auto mb-3 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375" />
+              </svg>
+              No spools found
+            </div>
+          )}
         </div>
-        <div className="card-body p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-surface-700/50 text-xs text-surface-400 uppercase tracking-wider">
-                  <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-surface-200" onClick={() => handleSort('brand')}>Color/Name {sortIcon('brand')}</th>
-                  <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-surface-200" onClick={() => handleSort('material')}>Brand / Material {sortIcon('material')}</th>
-                  <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-surface-200" onClick={() => handleSort('total_weight_g')}>Total {sortIcon('total_weight_g')}</th>
-                  <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-surface-200" onClick={() => handleSort('pct_remaining')}>Remaining {sortIcon('pct_remaining')}</th>
-                  <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-surface-200" onClick={() => handleSort('cost_per_kg')}>Cost/kg {sortIcon('cost_per_kg')}</th>
-                  <th className="text-left px-4 py-3 font-medium">Location</th>
-                  <th className="text-left px-4 py-3 font-medium">Slot</th>
-                  <th className="text-right px-4 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map(roll => (
-                  editing === roll.id ? (
-                    <RollFormInline
-                      key={roll.id}
-                      roll={roll}
-                      onSave={async (data) => {
-                        const updated = await updateFilamentRoll(roll.id, data)
-                        setRolls(prev => prev.map(r => r.id === roll.id ? updated : r))
-                        setEditing(null)
-                      }}
-                      onCancel={() => setEditing(null)}
-                      onDelete={async () => {
-                        await deleteFilamentRoll(roll.id)
-                        setRolls(prev => prev.filter(r => r.id !== roll.id))
-                        setEditing(null)
-                      }}
-                    />
-                  ) : (
-                    <tr key={roll.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
+      ) : (
+        <div className="card">
+          <div className="card-body p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-700/50 text-xs text-surface-400 uppercase tracking-wider">
+                    <th className="text-left px-4 py-3 font-medium">Spool</th>
+                    <th className="text-left px-4 py-3 font-medium">Material</th>
+                    <th className="text-right px-4 py-3 font-medium">Remaining</th>
+                    <th className="text-right px-4 py-3 font-medium">Cost/kg</th>
+                    <th className="text-left px-4 py-3 font-medium">Location</th>
+                    <th className="text-right px-4 py-3 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(roll => (
+                    <tr key={roll.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors cursor-pointer" onClick={() => { setEditing(roll); setAdding(false) }}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {roll.color_hex && (
-                            <div
-                              className="w-5 h-5 rounded-full border border-surface-600 shrink-0"
-                              style={{ backgroundColor: roll.color_hex }}
-                            />
-                          )}
-                          <span className="text-surface-200">{roll.color_name || '—'}</span>
+                          <div className="w-4 h-4 rounded-full border border-surface-600 shrink-0" style={{ backgroundColor: roll.color_hex || '#666' }} />
+                          <span className="text-surface-200">{roll.brand || 'Unknown'} — {roll.color_name || '—'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <p className="text-surface-200">{roll.brand || 'Unknown'}</p>
-                        <p className="text-[10px] text-surface-500">{roll.material}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right text-surface-300">
-                        {(roll.total_weight_g / 1000).toFixed(2)} kg
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: (MATERIAL_COLORS[roll.material] || '#6b7280') + '20', color: MATERIAL_COLORS[roll.material] || '#6b7280' }}>
+                          {roll.material}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <p className="text-surface-200">{(roll.remaining_weight_g / 1000).toFixed(2)} kg</p>
-                        <div className="mt-1 w-full bg-surface-700 rounded-full h-1">
-                          <div
-                            className={`h-1 rounded-full ${roll.remaining_weight_g / roll.total_weight_g > 0.2 ? 'bg-emerald-500' : 'bg-rose-500'}`}
-                            style={{ width: `${Math.min((roll.remaining_weight_g / roll.total_weight_g) * 100, 100)}%` }}
-                          />
-                        </div>
+                        <span className="text-surface-200">{(roll.remaining_weight_g / 1000).toFixed(2)} kg</span>
+                        <span className="text-surface-500 text-xs ml-1">({pctRemaining(roll)}%)</span>
                       </td>
-                      <td className="px-4 py-3 text-right text-surface-300">
-                        {roll.cost_per_kg ? `$${roll.cost_per_kg.toFixed(2)}` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-surface-400">{roll.location || '—'}</td>
-                      <td className="px-4 py-3 text-surface-400">{roll.spool_id || '—'}</td>
+                      <td className="px-4 py-3 text-right text-surface-300">{roll.cost_per_kg ? `$${roll.cost_per_kg.toFixed(2)}` : '—'}</td>
+                      <td className="px-4 py-3 text-surface-400">{roll.location || '—'}{roll.spool_id ? ` / ${roll.spool_id}` : ''}</td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => setEditing(roll.id)}
-                          className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors"
-                        >Edit</button>
+                        <button className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Edit</button>
                       </td>
                     </tr>
-                  )
-                ))}
-                {sorted.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-surface-500">No filament rolls found</td></tr>
-                )}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void }> = ({ roll, onEdit }) => {
+  const pct = pctRemaining(roll)
+  const matColor = MATERIAL_COLORS[roll.material] || '#6b7280'
+
+  return (
+    <div className="card group hover:border-surface-600 transition-all cursor-pointer" onClick={onEdit}>
+      <div className="card-body p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <ProgressArc pct={pct} size={56} strokeWidth={4} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-xs font-bold" style={{ color: pctColor(pct) }}>{pct}%</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white leading-tight">{roll.brand || 'Unknown'}</p>
+              <p className="text-xs text-surface-400 mt-0.5">{roll.color_name || '—'}</p>
+              <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: matColor + '20', color: matColor }}>
+                {roll.material}
+              </span>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-lg border border-surface-700" style={{ backgroundColor: roll.color_hex || '#666' }} />
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+          <div className="flex justify-between">
+            <span className="text-surface-500">Remaining</span>
+            <span className="text-surface-200 font-medium">{(roll.remaining_weight_g / 1000).toFixed(2)} kg</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-surface-500">Total</span>
+            <span className="text-surface-300">{(roll.total_weight_g / 1000).toFixed(2)} kg</span>
+          </div>
+          {roll.cost_per_kg && (
+            <div className="flex justify-between">
+              <span className="text-surface-500">Cost</span>
+              <span className="text-amber-400 font-medium">${roll.cost_per_kg.toFixed(2)}/kg</span>
+            </div>
+          )}
+          {(roll.location || roll.spool_id) && (
+            <div className="flex justify-between">
+              <span className="text-surface-500">Location</span>
+              <span className="text-surface-300">{roll.location || roll.spool_id || '—'}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-2 w-full bg-surface-800 rounded-full h-1.5">
+          <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
         </div>
       </div>
     </div>
   )
 }
 
-const RollForm: React.FC<{
+const SpoolForm: React.FC<{
+  roll: FilamentRoll | null
   onSave: (data: Partial<FilamentRoll>) => Promise<void>
   onCancel: () => void
-}> = ({ onSave, onCancel }) => {
+  onDelete?: () => Promise<void>
+}> = ({ roll, onSave, onCancel, onDelete }) => {
   const [form, setForm] = useState({
-    brand: '', material: 'PLA', color_name: '', color_hex: '#ffffff',
-    total_weight_g: 1000, remaining_weight_g: 1000, cost_per_kg: 24.0,
-    location: '', notes: '', spool_id: '',
+    brand: roll?.brand || '',
+    material: roll?.material || 'PLA',
+    color_name: roll?.color_name || '',
+    color_hex: roll?.color_hex || '#ffffff',
+    total_weight_g: roll?.total_weight_g || 1000,
+    remaining_weight_g: roll?.remaining_weight_g || 1000,
+    cost_per_kg: roll?.cost_per_kg || 24.0,
+    location: roll?.location || '',
+    notes: roll?.notes || '',
+    spool_id: roll?.spool_id || '',
   })
   const [saving, setSaving] = useState(false)
 
   return (
     <div className="card border border-accent-600/30">
-      <div className="card-header"><h2 className="text-sm font-semibold text-white">Add New Roll</h2></div>
+      <div className="card-header flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-white">{roll ? 'Edit Spool' : 'Add New Spool'}</h2>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded border border-surface-600" style={{ backgroundColor: form.color_hex }} />
+          <input type="color" value={form.color_hex} onChange={e => setForm(p => ({ ...p, color_hex: e.target.value }))}
+            className="w-6 h-6 bg-transparent border-0 cursor-pointer rounded" />
+        </div>
+      </div>
       <div className="card-body">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Input label="Brand" value={form.brand} onChange={v => setForm(p => ({ ...p, brand: v }))} />
@@ -247,93 +325,35 @@ const RollForm: React.FC<{
             </select>
           </div>
           <Input label="Color Name" value={form.color_name} onChange={v => setForm(p => ({ ...p, color_name: v }))} />
-          <div>
-            <label className="text-xs text-surface-500 block mb-1">Color</label>
-            <input type="color" value={form.color_hex} onChange={e => setForm(p => ({ ...p, color_hex: e.target.value }))}
-              className="w-full h-8 bg-surface-800 border border-surface-700 rounded cursor-pointer" />
-          </div>
-          <Input label="Total (g)" type="number" value={String(form.total_weight_g)} onChange={v => setForm(p => ({ ...p, total_weight_g: Number(v) }))} />
+          <Input label="Total Weight (g)" type="number" value={String(form.total_weight_g)} onChange={v => setForm(p => ({ ...p, total_weight_g: Number(v) }))} />
           <Input label="Remaining (g)" type="number" value={String(form.remaining_weight_g)} onChange={v => setForm(p => ({ ...p, remaining_weight_g: Number(v) }))} />
           <Input label="Cost/kg ($)" type="number" value={String(form.cost_per_kg)} onChange={v => setForm(p => ({ ...p, cost_per_kg: Number(v) }))} />
           <Input label="Location" value={form.location} onChange={v => setForm(p => ({ ...p, location: v }))} />
           <Input label="CFS Slot (e.g. T2D)" value={form.spool_id} onChange={v => setForm(p => ({ ...p, spool_id: v }))} />
-          <Input label="Notes" value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} />
+        </div>
+        <div className="mt-3">
+          <Input label="Notes" value={form.notes || ''} onChange={v => setForm(p => ({ ...p, notes: v }))} />
         </div>
         <div className="flex gap-2 mt-4">
           <button onClick={async () => { setSaving(true); await onSave(form); }} disabled={saving}
-            className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm rounded transition-colors disabled:opacity-50">Save</button>
-          <button onClick={onCancel} className="px-4 py-2 bg-surface-700 hover:bg-surface-600 text-surface-300 text-sm rounded transition-colors">Cancel</button>
+            className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button onClick={onCancel} className="px-4 py-2 bg-surface-700 hover:bg-surface-600 text-surface-300 text-sm rounded-lg transition-colors">Cancel</button>
+          {onDelete && (
+            <button onClick={onDelete} className="px-4 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 text-sm rounded-lg transition-colors ml-auto">Delete</button>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-const RollFormInline: React.FC<{
-  roll: FilamentRoll
-  onSave: (data: Partial<FilamentRoll>) => Promise<void>
-  onCancel: () => void
-  onDelete: () => Promise<void>
-}> = ({ roll, onSave, onCancel, onDelete }) => {
-  const [form, setForm] = useState({
-    brand: roll.brand, material: roll.material, color_name: roll.color_name || '',
-    color_hex: roll.color_hex || '#ffffff', remaining_weight_g: roll.remaining_weight_g,
-    cost_per_kg: roll.cost_per_kg || 24.0, location: roll.location || '', spool_id: roll.spool_id || '',
-    notes: roll.notes || '',
-  })
-
-  return (
-    <tr className="bg-surface-800/50">
-      <td className="px-4 py-2">
-        <input type="color" value={form.color_hex} onChange={e => setForm(p => ({ ...p, color_hex: e.target.value }))}
-          className="w-6 h-6 bg-transparent border-0 cursor-pointer" />
-        <input value={form.color_name} onChange={e => setForm(p => ({ ...p, color_name: e.target.value }))}
-          className="ml-1 w-20 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200" placeholder="Color" />
-      </td>
-      <td className="px-4 py-2">
-        <input value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))}
-          className="w-20 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200" />
-        <select value={form.material} onChange={e => setForm(p => ({ ...p, material: e.target.value }))}
-          className="ml-1 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200">
-          {MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </td>
-      <td className="px-4 py-2 text-right">
-        <span className="text-xs text-surface-400">{(roll.total_weight_g / 1000).toFixed(2)} kg</span>
-      </td>
-      <td className="px-4 py-2 text-right">
-        <input type="number" value={form.remaining_weight_g} onChange={e => setForm(p => ({ ...p, remaining_weight_g: Number(e.target.value) }))}
-          className="w-16 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200 text-right" />
-        <span className="text-[10px] text-surface-500 ml-0.5">g</span>
-      </td>
-      <td className="px-4 py-2 text-right">
-        <input type="number" step="0.01" value={form.cost_per_kg} onChange={e => setForm(p => ({ ...p, cost_per_kg: Number(e.target.value) }))}
-          className="w-16 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200 text-right" />
-      </td>
-      <td className="px-4 py-2">
-        <input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
-          className="w-20 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200" />
-      </td>
-      <td className="px-4 py-2">
-        <input value={form.spool_id} onChange={e => setForm(p => ({ ...p, spool_id: e.target.value }))}
-          className="w-12 bg-surface-800 border border-surface-700 rounded px-1 py-0.5 text-xs text-surface-200" />
-      </td>
-      <td className="px-4 py-2 text-right space-x-1">
-        <button onClick={() => onSave(form)} className="px-2 py-0.5 text-xs bg-accent-600 hover:bg-accent-500 text-white rounded">Save</button>
-        <button onClick={onCancel} className="px-2 py-0.5 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded">Cancel</button>
-        <button onClick={onDelete} className="px-2 py-0.5 text-xs bg-rose-600/50 hover:bg-rose-600 text-rose-200 rounded">Del</button>
-      </td>
-    </tr>
-  )
-}
-
-const Input: React.FC<{
-  label: string; value: string; onChange: (v: string) => void; type?: string
-}> = ({ label, value, onChange, type = 'text' }) => (
+const Input: React.FC<{ label: string; value: string; onChange: (v: string) => void; type?: string }> = ({ label, value, onChange, type = 'text' }) => (
   <div>
     <label className="text-xs text-surface-500 block mb-1">{label}</label>
     <input type={type} value={value} onChange={e => onChange(e.target.value)}
-      className="w-full bg-surface-800 border border-surface-700 rounded px-2 py-1.5 text-sm text-surface-200 focus:outline-none focus:border-accent-500" />
+      className="w-full bg-surface-800 border border-surface-700 rounded-lg px-2 py-1.5 text-sm text-surface-200 focus:outline-none focus:border-accent-500" />
   </div>
 )
 
