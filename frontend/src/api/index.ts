@@ -243,6 +243,11 @@ export async function fetchSetupStatus(): Promise<{
   return data
 }
 
+export async function testConnection(host: string, port: number): Promise<{ connected: boolean; host: string; port: number }> {
+  const { data } = await api.get('/api/v1/settings/setup/test-connection', { params: { host, port } })
+  return data
+}
+
 export async function saveConnection(data: {
   moonraker_host?: string
   moonraker_port?: number

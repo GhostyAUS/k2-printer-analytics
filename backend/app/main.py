@@ -68,8 +68,10 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
 
 
 async def auth_middleware_func(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
     path = request.url.path
-    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status"]
+    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status", "/api/v1/settings/setup/test-connection"]
     if path in public_paths or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/api/v1/auth/"):
         return await call_next(request)
     if path.startswith("/api/v1/"):
@@ -92,8 +94,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    app.add_middleware(DynamicCORSMiddleware)
     app.middleware("http")(auth_middleware_func)
+    app.add_middleware(DynamicCORSMiddleware)
     
     # Include routers
     app.include_router(health_router, prefix="/api/v1")

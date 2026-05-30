@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { fetchSetupStatus, saveConnection, register } from '../api'
+import { fetchSetupStatus, saveConnection, register, testConnection as apiTestConnection } from '../api'
 
 const TIMEZONES = [
   'Australia/Perth', 'Australia/Adelaide', 'Australia/Brisbane', 'Australia/Sydney', 'Australia/Melbourne', 'Australia/Hobart', 'Australia/Darwin',
@@ -49,13 +49,12 @@ const SetupWizard: React.FC = () => {
     }).catch(() => {})
   }, [])
 
-  const testConnection = async () => {
+  const handleTestConnection = async () => {
     setTesting(true)
     setConnected(null)
     try {
-      await saveConnection({ moonraker_host: host, moonraker_port: parseInt(port) })
-      const status = await fetchSetupStatus()
-      setConnected(status.moonraker_connected)
+      const result = await apiTestConnection(host, parseInt(port))
+      setConnected(result.connected)
     } catch { setConnected(false) }
     setTesting(false)
   }
@@ -74,6 +73,9 @@ const SetupWizard: React.FC = () => {
       return
     }
     try {
+      const authResult = await register(username, password)
+      localStorage.setItem('k2_token', authResult.access_token)
+      localStorage.setItem('k2_user', JSON.stringify({ username: authResult.username, is_admin: authResult.is_admin }))
       await saveConnection({
         moonraker_host: host,
         moonraker_port: parseInt(port),
@@ -86,9 +88,6 @@ const SetupWizard: React.FC = () => {
           meross_device_name: merossName,
         }),
       })
-      const authResult = await register(username, password)
-      localStorage.setItem('k2_token', authResult.access_token)
-      localStorage.setItem('k2_user', JSON.stringify({ username: authResult.username, is_admin: authResult.is_admin }))
       setTimeout(() => window.location.replace('/'), 500)
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Failed to save configuration')
@@ -158,7 +157,7 @@ const SetupWizard: React.FC = () => {
                   <input type="text" value={port} onChange={e => setPort(e.target.value)} className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2.5 text-surface-200 focus:outline-none focus:border-accent-500" />
                 </div>
               </div>
-              <button onClick={testConnection} disabled={testing || !host} className="w-full px-4 py-2.5 bg-surface-700 hover:bg-surface-600 text-surface-200 text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+              <button onClick={handleTestConnection} disabled={testing || !host} className="w-full px-4 py-2.5 bg-surface-700 hover:bg-surface-600 text-surface-200 text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
                 {testing ? 'Testing...' : 'Test Connection'}
               </button>
               {connected === true && <p className="text-emerald-400 text-sm text-center">Connected to Moonraker successfully!</p>}

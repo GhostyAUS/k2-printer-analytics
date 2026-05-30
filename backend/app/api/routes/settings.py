@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, Dict
@@ -156,3 +156,13 @@ def get_setup_status(db: Session = Depends(get_db)):
         "meross_configured": has_meross,
         "has_user": has_user,
     }
+
+
+@router.get("/setup/test-connection")
+def test_connection(host: str = Query(...), port: int = Query(7125)):
+    import httpx
+    try:
+        resp = httpx.get(f"http://{host}:{port}/printer/info", timeout=5)
+        return {"connected": resp.status_code == 200, "host": host, "port": port}
+    except Exception as e:
+        return {"connected": False, "host": host, "port": port, "error": str(e)}
