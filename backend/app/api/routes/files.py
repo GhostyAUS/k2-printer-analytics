@@ -3,6 +3,7 @@ from fastapi.responses import Response, RedirectResponse
 from sqlalchemy.orm import Session
 from urllib.parse import quote
 import aiohttp
+import base64
 import logging
 from app.core.config import settings
 from app.core.database import get_db
@@ -83,6 +84,57 @@ async def get_file_metadata(request: Request, db: Session = Depends(get_db), fil
     }
 
 
+async def _extract_gcode_thumbnail(session: aiohttp.ClientSession, moonraker_url: str, filename: str) -> bytes | None:
+    gcode_url = f"{moonraker_url}/server/files/gcodes/{quote(filename, safe='/')}"
+    headers = {"Range": "bytes=0-65535"}
+    try:
+        async with session.get(gcode_url, headers=headers) as resp:
+            if resp.status not in (200, 206):
+                return None
+            data = await resp.text()
+    except Exception:
+        return None
+
+    best_b64 = None
+    best_size = 0
+    lines = data.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith("; thumbnail begin") or line.startswith("; png begin"):
+            parts = line.split()
+            dims = None
+            for p in parts:
+                if "x" in p and p.replace("x", "").isdigit():
+                    dims = p
+                    break
+            width = 0
+            if dims:
+                try:
+                    width = int(dims.split("x")[0])
+                except ValueError:
+                    pass
+            b64_lines = []
+            i += 1
+            while i < len(lines):
+                l = lines[i].strip()
+                if l.startswith("; thumbnail end") or l.startswith("; png end"):
+                    break
+                if l.startswith(";"):
+                    b64_lines.append(l[1:].strip())
+                i += 1
+            if b64_lines and width >= best_size:
+                try:
+                    img_bytes = base64.b64decode("".join(b64_lines))
+                    best_b64 = img_bytes
+                    best_size = width
+                except Exception:
+                    pass
+        i += 1
+
+    return best_b64
+
+
 async def _find_thumbnail_path(session: aiohttp.ClientSession, moonraker_url: str, filename: str) -> str | None:
     url = f"{moonraker_url}/server/files/metadata?filename={quote(filename)}"
     async with session.get(url) as resp:
@@ -156,12 +208,20 @@ async def _find_thumbnail_path(session: aiohttp.ClientSession, moonraker_url: st
 
 @router.get("/thumbnail")
 async def get_file_thumbnail(request: Request, db: Session = Depends(get_db), filename: str = Query(...)):
-    """Get thumbnail URL for a gcode file."""
+    """Get thumbnail URL or extracted base64 for a gcode file."""
     session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
     thumb_url = await _find_thumbnail_path(session, moonraker_url, filename)
     if thumb_url:
         return {"thumbnail": thumb_url}
+
+    img_bytes = await _extract_gcode_thumbnail(session, moonraker_url, filename)
+    if img_bytes:
+        import hashlib
+        h = hashlib.md5(img_bytes).hexdigest()[:12]
+        b64 = base64.b64encode(img_bytes).decode("ascii")
+        return {"thumbnail": f"data:image/png;base64,{b64}", "thumbnail_hash": h}
+
     return {"thumbnail": None}
 
 
@@ -170,11 +230,16 @@ async def get_thumbnail_image(request: Request, db: Session = Depends(get_db), f
     """Proxy thumbnail image for a gcode file. Returns PNG directly or 404."""
     session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
+
     thumb_url = await _find_thumbnail_path(session, moonraker_url, filename)
-    if not thumb_url:
-        return Response(status_code=404, content=b"Not found")
-    async with session.get(thumb_url) as resp:
-        if resp.status != 200:
-            return Response(status_code=404, content=b"Not found")
-        body = await resp.read()
-        return Response(content=body, media_type="image/png")
+    if thumb_url:
+        async with session.get(thumb_url) as resp:
+            if resp.status == 200:
+                body = await resp.read()
+                return Response(content=body, media_type="image/png")
+
+    img_bytes = await _extract_gcode_thumbnail(session, moonraker_url, filename)
+    if img_bytes:
+        return Response(content=img_bytes, media_type="image/png")
+
+    return Response(status_code=404, content=b"Not found")
