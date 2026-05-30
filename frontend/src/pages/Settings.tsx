@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { fetchSettings, setSetting, resetSetting, fetchCfsOverrides, upsertCfsOverride, resetCfsOverride, fetchNotificationConfig, updateNotificationConfig, saveConnection, fetchSetupStatus } from '../api'
+import { fetchSettings, setSetting, resetSetting, fetchCfsOverrides, upsertCfsOverride, resetCfsOverride, fetchNotificationConfig, updateNotificationConfig, saveConnection, fetchSetupStatus, runAllDebugTests, type DebugTestResult } from '../api'
+import { useToast } from '../components/Toast'
 import type { CfsSlotOverride } from '../types'
 
 const Settings: React.FC = () => {
+  const { toast } = useToast()
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [overrides, setOverrides] = useState<CfsSlotOverride[]>([])
   const [saving, setSaving] = useState<string | null>(null)
@@ -11,6 +13,18 @@ const Settings: React.FC = () => {
   const [connected, setConnected] = useState<boolean | null>(null)
   const [connSaving, setConnSaving] = useState(false)
   const [connTesting, setConnTesting] = useState(false)
+  const [debugRunning, setDebugRunning] = useState(false)
+  const [debugResults, setDebugResults] = useState<DebugTestResult[] | null>(null)
+
+  const testCategories: Record<string, string> = {
+    moonraker_reachable: 'Connectivity', moonraker_print_stats: 'Connectivity', moonraker_cfs_data: 'Connectivity', moonraker_vsd: 'Connectivity',
+    db_healthy: 'Connectivity', db_tables: 'Connectivity', meross_power: 'Connectivity',
+    cfs_sync: 'Data & Logic', color_normalization: 'Data & Logic', filament_cost_math: 'Data & Logic', mw_delta: 'Data & Logic',
+    cross_tray_guard: 'Data & Logic', filament_decrement: 'Data & Logic', cfs_override_decrement: 'Data & Logic',
+    power_downsample: 'Data & Logic', auth_token: 'Data & Logic', settings_crud: 'Data & Logic',
+    tracker_running: 'Tracker', active_job: 'Tracker', filament_total: 'Tracker',
+    frontend_served: 'Frontend', api_proxy: 'Frontend',
+  }
 
   useEffect(() => {
     Promise.all([fetchSettings(), fetchCfsOverrides(), fetchNotificationConfig()])
@@ -33,7 +47,8 @@ const Settings: React.FC = () => {
     try {
       await setSetting(key, value)
       setSettings(prev => ({ ...prev, [key]: value }))
-    } catch (e) { console.error(e) }
+      toast('Setting saved', 'success')
+    } catch (e) { console.error(e); toast('Failed to save setting', 'error') }
     setSaving(null)
   }
 
@@ -42,7 +57,8 @@ const Settings: React.FC = () => {
     try {
       const res = await resetSetting(key)
       setSettings(prev => ({ ...prev, [key]: res.value || '' }))
-    } catch (e) { console.error(e) }
+      toast('Setting reset to default', 'success')
+    } catch (e) { console.error(e); toast('Failed to reset setting', 'error') }
     setSaving(null)
   }
 
@@ -61,7 +77,8 @@ const Settings: React.FC = () => {
         }
         return [...prev, { id: 0, slot_id: slotId, material_name: null, color_hex: null, remaining_pct: null, cost_per_kg: field === 'cost_per_kg' ? (isNaN(numVal) ? null : numVal) : null, spool_weight_g: field === 'spool_weight_g' ? (isNaN(numVal) ? null : numVal) : null }]
       })
-    } catch (e) { console.error(e) }
+      toast('Slot override saved', 'success')
+    } catch (e) { console.error(e); toast('Failed to save override', 'error') }
     setSaving(null)
   }
 
@@ -70,7 +87,8 @@ const Settings: React.FC = () => {
     try {
       await resetCfsOverride(slotId)
       setOverrides(prev => prev.filter(o => o.slot_id !== slotId))
-    } catch (e) { console.error(e) }
+      toast('Slot override reset', 'success')
+    } catch (e) { console.error(e); toast('Failed to reset override', 'error') }
     setSaving(null)
   }
 
@@ -123,7 +141,8 @@ const Settings: React.FC = () => {
                   try {
                     const status = await fetchSetupStatus()
                     setConnected(status.moonraker_connected)
-                  } catch { setConnected(false) }
+                    toast(status.moonraker_connected ? 'Moonraker connected' : 'Moonraker not reachable', status.moonraker_connected ? 'success' : 'error')
+                  } catch { setConnected(false); toast('Connection test failed', 'error') }
                   setConnTesting(false)
                 }}
                 disabled={connTesting}
@@ -147,7 +166,8 @@ const Settings: React.FC = () => {
                 try {
                   await saveConnection({ moonraker_host: connection.moonraker_host, moonraker_port: connection.moonraker_port })
                   setSettings(s => ({ ...s, moonraker_host: connection.moonraker_host, moonraker_port: String(connection.moonraker_port) }))
-                } catch (e) { console.error(e) }
+                  toast('Printer connection saved', 'success')
+                } catch (e) { console.error(e); toast('Failed to save connection', 'error') }
                 setConnSaving(false)
               }}
               disabled={connSaving}
@@ -178,7 +198,8 @@ const Settings: React.FC = () => {
                     meross_device_uuid: connection.meross_device_uuid,
                   })
                   setSettings(s => ({ ...s, meross_email: connection.meross_email, meross_device_name: connection.meross_device_name }))
-                } catch (e) { console.error(e) }
+                  toast('Meross settings saved', 'success')
+                } catch (e) { console.error(e); toast('Failed to save Meross settings', 'error') }
                 setConnSaving(false)
               }}
               disabled={connSaving}
@@ -233,7 +254,7 @@ const Settings: React.FC = () => {
                 placeholder="https://hooks.slack.com/... or ntfy.sh/..."
                 className="flex-1 bg-surface-800 border border-surface-700 rounded px-2 py-1 text-sm text-surface-200 placeholder-surface-500 focus:outline-none focus:border-accent-500"
               />
-              <button onClick={async () => { await updateNotificationConfig(notifyConfig) }} className="px-2 py-1 text-xs bg-accent-600 hover:bg-accent-500 text-white rounded">Save</button>
+              <button onClick={async () => { try { await updateNotificationConfig(notifyConfig); toast('Notification settings saved', 'success') } catch { toast('Failed to save notifications', 'error') } }} className="px-2 py-1 text-xs bg-accent-600 hover:bg-accent-500 text-white rounded">Save</button>
             </div>
           </div>
           {[
@@ -262,6 +283,64 @@ const Settings: React.FC = () => {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
             Download CSV (All Print Jobs)
           </a>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Diagnostics</h2>
+            <p className="text-xs text-surface-500">Run system health checks</p>
+          </div>
+          <button
+            onClick={async () => {
+              setDebugRunning(true)
+              setDebugResults(null)
+              try {
+                const res = await runAllDebugTests()
+                setDebugResults(res.results)
+                toast(`${res.passed}/${res.total} tests passed`, res.failed === 0 ? 'success' : 'error')
+              } catch { toast('Failed to run diagnostics', 'error') }
+              setDebugRunning(false)
+            }}
+            disabled={debugRunning}
+            className="px-3 py-1.5 text-xs bg-accent-600 hover:bg-accent-500 text-white rounded transition-colors disabled:opacity-50"
+          >{debugRunning ? 'Running...' : 'Run All Tests'}</button>
+        </div>
+        <div className="card-body">
+          {debugRunning && !debugResults && (
+            <div className="flex items-center gap-2 text-sm text-surface-400">
+              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Running diagnostics...
+            </div>
+          )}
+          {debugResults && (
+            <div className="space-y-4">
+              {(() => {
+                const categories: Record<string, DebugTestResult[]> = {}
+                for (const r of debugResults) {
+                  const cat = testCategories[r.name] || 'Other'
+                  categories[cat] = categories[cat] || []
+                  categories[cat].push(r)
+                }
+                return Object.entries(categories).map(([cat, tests]) => (
+                  <div key={cat}>
+                    <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-2">{cat}</h3>
+                    <div className="space-y-1">
+                      {tests.map(r => (
+                        <div key={r.name} className="flex items-center gap-2 text-sm py-1">
+                          <span className={`text-base ${r.passed ? 'text-emerald-400' : 'text-rose-400'}`}>{r.passed ? '✓' : '✗'}</span>
+                          <span className="text-surface-200 font-mono text-xs min-w-[180px]">{r.name}</span>
+                          <span className={`text-xs ${r.passed ? 'text-surface-500' : 'text-rose-300'}`}>{r.detail}</span>
+                          <span className="text-[10px] text-surface-600 ml-auto">{r.duration_ms}ms</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,10 +1,19 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { fetchCfsSlots, fetchSpools, upsertCfsOverride, resetCfsOverride } from '../api'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { fetchCfsSlots, fetchSpools, upsertCfsOverride, resetCfsOverride, syncCfsToLibrary } from '../api'
+import { useToast } from '../components/Toast'
 import type { CfsSlot, Spool } from '../types'
 
+const normalizeHex = (hex: string): string => {
+  if (!hex || hex === '-1') return ''
+  let h = hex.replace('#', '')
+  if (h.length === 7 && h.startsWith('0')) h = h.substring(1)
+  return h.length === 6 ? `#${h}` : ''
+}
+
 const colorFromHex = (hex: string): string => {
-  if (!hex || hex === '-1' || hex.length < 6) return '#52525b'
-  const rgb = hex.replace('0x', '').replace('#', '')
+  const normed = normalizeHex(hex)
+  if (!normed) return '#52525b'
+  const rgb = normed.replace('#', '')
   const r = parseInt(rgb.substring(0, 2), 16)
   const g = parseInt(rgb.substring(2, 4), 16)
   const b = parseInt(rgb.substring(4, 6), 16)
@@ -26,6 +35,12 @@ const materialGradients: Record<string, string> = {
   ABS: 'from-red-500 to-red-700',
 }
 
+const FEED_STATE_LABELS: Record<string, { label: string; color: string; icon: string }> = {
+  idle: { label: 'Idle', color: 'text-surface-500', icon: '' },
+  active: { label: 'In Use', color: 'text-sky-400', icon: 'M5.636 5.636a9 9 0 1012.728 0M12 3v9' },
+  feeding: { label: 'Feeding', color: 'text-emerald-400', icon: 'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3' },
+}
+
 const defaultColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
   '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
@@ -33,16 +48,21 @@ const defaultColors = [
 ]
 
 const Spools: React.FC = () => {
+  const { toast } = useToast()
   const [slots, setSlots] = useState<CfsSlot[]>([])
   const [spools, setSpools] = useState<Spool[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [editingSlot, setEditingSlot] = useState<CfsSlot | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
+  const [isPrinting, setIsPrinting] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = useCallback(() => {
     Promise.all([fetchCfsSlots(), fetchSpools()])
       .then(([cfs, spoolData]) => {
         setSlots(cfs.slots)
+        setIsPrinting(cfs.is_printing)
         setSpools(spoolData)
       })
       .catch(console.error)
@@ -50,6 +70,18 @@ const Spools: React.FC = () => {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (isPrinting) {
+      pollRef.current = setInterval(load, 5000)
+    } else if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [isPrinting, load])
 
   const openEdit = (slot: CfsSlot) => {
     setEditingSlot(slot)
@@ -86,11 +118,45 @@ const Spools: React.FC = () => {
     </div>
   )
 
+  const activeSlot = slots.find(s => s.is_active)
+  const feedState = activeSlot?.feed_state || 'idle'
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Spools & CFS</h1>
-        <p className="text-sm text-surface-400 mt-1">{slots.length} slots detected</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Spools & CFS</h1>
+          <p className="text-sm text-surface-400 mt-1">{slots.length} slots detected</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setSyncing(true)
+              try {
+                const res = await syncCfsToLibrary()
+                toast(`Synced ${res.count} CFS slots to library`, 'success')
+                load()
+              } catch { toast('Sync failed', 'error') }
+              setSyncing(false)
+            }}
+            disabled={syncing}
+            className="px-3 py-1.5 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {syncing ? 'Syncing...' : 'Sync CFS → Library'}
+          </button>
+          {isPrinting && activeSlot && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-900/30 border border-sky-500/30 rounded-lg">
+              <div className={`w-2 h-2 rounded-full ${feedState === 'feeding' ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400 animate-pulse'}`} />
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full border border-surface-600" style={{ backgroundColor: colorFromHex(activeSlot.color_hex) }} />
+                <span className="text-xs text-sky-300 font-medium">{activeSlot.slot}</span>
+              </div>
+              <span className={`text-xs font-medium ${FEED_STATE_LABELS[feedState]?.color || 'text-surface-400'}`}>
+                {FEED_STATE_LABELS[feedState]?.label || 'Unknown'}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -98,14 +164,23 @@ const Spools: React.FC = () => {
           const color = colorFromHex(slot.color_hex)
           const grad = materialGradients[slot.material_name] || 'from-surface-600 to-surface-800'
           const cost = slot.cost_per_kg ? `$${slot.cost_per_kg.toFixed(2)}/kg` : null
+          const isActive = slot.is_active
+          const stateInfo = FEED_STATE_LABELS[slot.feed_state || 'idle']
+          const isFeeding = slot.feed_state === 'feeding'
+
           return (
-            <div key={slot.slot} className="card overflow-hidden group hover:border-accent-500/30 transition-all">
-              <div className={`h-2 bg-gradient-to-r ${grad}`} />
+            <div key={slot.slot}
+              className={`card overflow-hidden group transition-all ${
+                isActive
+                  ? 'border-sky-500/60 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
+                  : 'hover:border-accent-500/30'
+              }`}>
+              <div className={`h-2 bg-gradient-to-r ${grad} ${isActive && isFeeding ? 'animate-pulse' : ''}`} />
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div
-                      className="w-5 h-5 rounded-full border-2 border-surface-600"
+                      className={`w-5 h-5 rounded-full border-2 ${isActive ? 'border-sky-400 animate-pulse' : 'border-surface-600'}`}
                       style={{ backgroundColor: color }}
                     />
                     <h3 className="font-semibold text-white text-sm">{slot.slot}</h3>
@@ -113,6 +188,15 @@ const Spools: React.FC = () => {
                       <svg className="w-3.5 h-3.5 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
+                    )}
+                    {isActive && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        isFeeding
+                          ? 'bg-emerald-500/20 text-emerald-400 animate-pulse'
+                          : 'bg-sky-500/20 text-sky-400'
+                      }`}>
+                        {stateInfo?.label}
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
@@ -138,11 +222,11 @@ const Spools: React.FC = () => {
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs text-surface-500 mb-1">
                     <span>Remaining</span>
-                    <span>{slot.remaining_pct}%</span>
+                    <span>{slot.remaining_pct}%{slot.remaining_weight_g != null ? ` · ${slot.remaining_weight_g}g` : ''}</span>
                   </div>
                   <div className="w-full bg-surface-700 rounded-full h-1.5">
                     <div
-                      className={`h-1.5 rounded-full transition-all bg-gradient-to-r ${grad}`}
+                      className={`h-1.5 rounded-full transition-all bg-gradient-to-r ${grad} ${isActive && isFeeding ? 'animate-pulse' : ''}`}
                       style={{ width: `${slot.remaining_pct}%` }}
                     />
                   </div>
@@ -226,7 +310,7 @@ const Spools: React.FC = () => {
                   <input
                     type="color"
                     className="w-10 h-10 rounded-lg border border-surface-700 bg-transparent cursor-pointer"
-                    value={colorFromHex(form.color_hex || editingSlot.color_hex)}
+                    value={normalizeHex(form.color_hex || editingSlot.color_hex) || '#52525b'}
                     onChange={e => setForm(f => ({ ...f, color_hex: e.target.value.replace('#', '') }))}
                   />
                   <input

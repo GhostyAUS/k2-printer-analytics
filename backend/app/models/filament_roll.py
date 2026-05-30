@@ -10,6 +10,7 @@ class FilamentRoll(BaseModel):
     color_name = Column(String(100), nullable=True)
     color_hex = Column(String(10), nullable=True)
     total_weight_g = Column(Float, nullable=False, default=1000.0)
+    spool_weight_g = Column(Float, nullable=False, default=0.0)
     remaining_weight_g = Column(Float, nullable=False, default=1000.0)
     cost_per_kg = Column(Float, nullable=True)
     purchase_date = Column(DateTime, nullable=True)

@@ -80,11 +80,28 @@ def get_summary(db: Session = Depends(get_db)):
 def get_power_history(minutes: int = Query(60, ge=1, le=1440), db: Session = Depends(get_db)):
     since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
     logs = db.query(PowerLog).filter(PowerLog.timestamp >= since).order_by(PowerLog.timestamp).all()
-    return [{
-        "timestamp": log.timestamp.isoformat() if log.timestamp else None,
-        "wattage": log.wattage,
-        "job_id": log.print_job_id,
-    } for log in logs]
+    if not logs:
+        return []
+    max_points = 120
+    if len(logs) <= max_points:
+        return [{
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "wattage": log.wattage,
+            "job_id": log.print_job_id,
+        } for log in logs]
+    bucket_size = len(logs) / max_points
+    result = []
+    for i in range(max_points):
+        start = int(i * bucket_size)
+        end = int((i + 1) * bucket_size)
+        bucket = logs[start:end]
+        avg_w = sum(l.wattage for l in bucket) / len(bucket)
+        result.append({
+            "timestamp": bucket[-1].timestamp.isoformat() if bucket[-1].timestamp else None,
+            "wattage": round(avg_w, 1),
+            "job_id": bucket[-1].print_job_id,
+        })
+    return result
 
 
 @router.get("/slicer-accuracy")
@@ -285,3 +302,14 @@ def mark_maintenance_done(key: str, db: Session = Depends(get_db)):
         db.add(AppConfig(key=last_done_key, value=str(total_hours)))
     db.commit()
     return {"status": "ok", "hours_reset_at": round(total_hours, 1)}
+
+
+@router.get("/slot-usage/{job_id}")
+def get_slot_usage(job_id: int, db: Session = Depends(get_db)):
+    from app.models.cfs_slot_usage import CfsSlotUsage
+    usages = db.query(CfsSlotUsage).filter(CfsSlotUsage.print_job_id == job_id).order_by(CfsSlotUsage.id).all()
+    return [{"slot_id": u.slot_id, "tray_id": u.tray_id, "material_name": u.material_name,
+             "color_hex": u.color_hex, "filament_used_mm": u.filament_used_mm,
+             "filament_used_g": u.filament_used_g, "measuring_wheel_start": u.measuring_wheel_start,
+             "measuring_wheel_end": u.measuring_wheel_end, "started_at": u.started_at,
+             "ended_at": u.ended_at} for u in usages]

@@ -1,5 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { fetchJobsPaginated, type PaginatedJobs } from '../api'
+import { fetchJobsPaginated, fetchSlotUsage, type PaginatedJobs } from '../api'
+
+type SlotUsage = {
+  slot_id: string
+  tray_id: string
+  material_name: string | null
+  color_hex: string | null
+  filament_used_mm: number | null
+  filament_used_g: number | null
+  started_at: string | null
+  ended_at: string | null
+}
 
 const statusConfig: Record<string, { badge: string; label: string }> = {
   PRINTING: { badge: 'badge-info', label: 'Printing' },
@@ -42,7 +53,34 @@ const PrintJobs: React.FC = () => {
   const [sortBy, setSortBy] = useState<SortField>('start_time')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [expandedJob, setExpandedJob] = useState<number | null>(null)
+  const [slotUsages, setSlotUsages] = useState<Record<number, SlotUsage[]>>({})
   const perPage = 25
+
+  const toggleExpand = async (jobId: number) => {
+    if (expandedJob === jobId) {
+      setExpandedJob(null)
+    } else {
+      setExpandedJob(jobId)
+      if (!slotUsages[jobId]) {
+        try {
+          const data = await fetchSlotUsage(jobId)
+          setSlotUsages(prev => ({ ...prev, [jobId]: data }))
+        } catch { /* ignore */ }
+      }
+    }
+  }
+
+  const colorFromHex = (hex: string | null): string => {
+    if (!hex || hex === '-1') return '#52525b'
+    let h = hex.replace('#', '')
+    if (h.length === 7 && h.startsWith('0')) h = h.substring(1)
+    if (h.length !== 6) return '#52525b'
+    const r = parseInt(h.substring(0, 2), 16)
+    const g = parseInt(h.substring(2, 4), 16)
+    const b = parseInt(h.substring(4, 6), 16)
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return '#52525b'
+    return `rgb(${r}, ${g}, ${b})`
+  }
 
   const loadData = useCallback(async () => {
     try {
@@ -179,7 +217,7 @@ const PrintJobs: React.FC = () => {
                   <React.Fragment key={job.id}>
                     <tr
                       className={`border-t border-surface-700/20 hover:bg-surface-800/30 transition-colors cursor-pointer ${isExpanded ? 'bg-surface-800/20' : ''}`}
-                      onClick={() => setExpandedJob(isExpanded ? null : job.id)}
+                      onClick={() => toggleExpand(job.id)}
                     >
                       <td className="px-4 py-3 text-surface-200 font-medium max-w-[200px] truncate" title={job.filename}>
                         {job.filename.replace(/\.gcode$/i, '')}
@@ -222,7 +260,7 @@ const PrintJobs: React.FC = () => {
                     {isExpanded && (
                       <tr className="bg-surface-900/50">
                         <td colSpan={11} className="px-6 py-4">
-                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-xs">
+                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-xs mb-4">
                             <div>
                               <span className="text-surface-500 block">Est. Filament</span>
                               <span className="text-surface-200">{job.estimated_filament_g ? `${job.estimated_filament_g.toFixed(0)} g` : '—'}</span>
@@ -248,6 +286,26 @@ const PrintJobs: React.FC = () => {
                               <span className="text-surface-200">#{job.id}</span>
                             </div>
                           </div>
+                          {slotUsages[job.id] && slotUsages[job.id].length > 0 && (
+                            <div className="border-t border-surface-700/30 pt-3">
+                              <p className="text-xs text-surface-400 font-medium mb-2">CFS Slot Usage</p>
+                              <div className="flex flex-wrap gap-3">
+                                {slotUsages[job.id].map((slot, si) => (
+                                  <div key={si} className="flex items-center gap-2 bg-surface-800/50 rounded-lg px-3 py-2">
+                                    <div className="w-3 h-3 rounded-full border border-surface-600 shrink-0" style={{ backgroundColor: colorFromHex(slot.color_hex) }} />
+                                    <div>
+                                      <p className="text-xs text-surface-200 font-medium">{slot.slot_id}</p>
+                                      <p className="text-[10px] text-surface-500">{slot.material_name || '—'}</p>
+                                    </div>
+                                    <div className="ml-3 text-right">
+                                      <p className="text-xs text-surface-200">{slot.filament_used_g ? `${slot.filament_used_g.toFixed(1)}g` : '—'}</p>
+                                      <p className="text-[10px] text-surface-500">{slot.filament_used_mm ? `${(slot.filament_used_mm / 1000).toFixed(2)}m` : '—'}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

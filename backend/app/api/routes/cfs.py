@@ -41,8 +41,6 @@ MATERIAL_MAP = {
     "0fc9da9": "PLA Orange",
 }
 
-VALID_SLOTS = [f"T{t}{p}" for t in ("1", "2", "3", "4") for p in ("A", "B", "C", "D")]
-
 
 def _build_name_map(same_material: list) -> dict[str, str]:
     name_map: dict[str, str] = {}
@@ -61,32 +59,127 @@ def _load_overrides(db: Session) -> dict[str, CfsSlotOverride]:
     return {r.slot_id: r for r in rows}
 
 
-def _merge_slot(slot: dict, overrides: dict[str, CfsSlotOverride]) -> dict:
+def _normalize_hex(hex_val: str) -> str:
+    if not hex_val or hex_val == "-1":
+        return ""
+    h = hex_val.replace('#', '')
+    if len(h) == 7 and h.startswith('0'):
+        h = h[1:]
+    return f"#{h}" if len(h) == 6 else hex_val
+
+
+def _merge_slot(slot: dict, overrides: dict[str, CfsSlotOverride], library: dict[str, "FilamentRoll"] = None) -> dict:
     o = overrides.get(slot["slot"])
     if o is None:
         slot["has_override"] = False
-        return slot
+    else:
+        if o.material_name:
+            slot["material_name"] = o.material_name
+        if o.color_hex:
+            slot["color_hex"] = _normalize_hex(o.color_hex)
+        if o.remaining_pct is not None:
+            slot["remaining_pct"] = int(o.remaining_pct)
+        slot["has_override"] = True
+        slot["cost_per_kg"] = o.cost_per_kg
+        slot["spool_weight_g"] = o.spool_weight_g
+        if o.cost_per_kg and o.spool_weight_g:
+            slot["estimated_spool_cost"] = round(o.cost_per_kg * o.spool_weight_g / 1000, 2)
 
-    if o.material_name:
-        slot["material_name"] = o.material_name
-    if o.color_hex:
-        slot["color_hex"] = o.color_hex
-    if o.remaining_pct is not None:
-        slot["remaining_pct"] = int(o.remaining_pct)
+    if library:
+        roll = library.get(slot["slot"])
+        if roll:
+            slot["remaining_weight_g"] = round(roll.remaining_weight_g, 1)
+            slot["total_weight_g"] = roll.total_weight_g
+            if roll.cost_per_kg and not slot.get("cost_per_kg"):
+                slot["cost_per_kg"] = roll.cost_per_kg
+        elif slot["remaining_pct"] is not None:
+            spool_w = slot.get("spool_weight_g") or 1000.0
+            slot["remaining_weight_g"] = round(slot["remaining_pct"] / 100.0 * spool_w, 1)
+            slot["total_weight_g"] = spool_w
+    elif slot["remaining_pct"] is not None:
+        spool_w = slot.get("spool_weight_g") or 1000.0
+        slot["remaining_weight_g"] = round(slot["remaining_pct"] / 100.0 * spool_w, 1)
+        slot["total_weight_g"] = spool_w
 
-    slot["has_override"] = True
-    slot["cost_per_kg"] = o.cost_per_kg
-    slot["spool_weight_g"] = o.spool_weight_g
-    if o.cost_per_kg and o.spool_weight_g:
-        slot["estimated_spool_cost"] = round(o.cost_per_kg * o.spool_weight_g / 1000, 2)
     return slot
 
 
+def _build_slots(box: dict, filament_rack: dict, name_map: dict, overrides: dict[str, CfsSlotOverride], is_printing: bool = False, library: dict = None) -> list[dict]:
+    rack_color = filament_rack.get("remain_material_color", "-1")
+    rack_mat = filament_rack.get("remain_material_type", "-1")
+    rack_velocity = filament_rack.get("remain_material_velocity", 0)
+
+    slots = []
+    active_slot_id = None
+
+    for tray_id in ("T1", "T2", "T3", "T4"):
+        tray = box.get(tray_id, {})
+        if tray.get("state") == "None":
+            continue
+        remaining_pct = tray.get("remain_len", ["0", "0", "0", "0"])
+        colors = tray.get("color_value", ["-1", "-1", "-1", "-1"])
+        materials = tray.get("material_type", ["-1", "-1", "-1", "-1"])
+        tray_filament = tray.get("filament", "None")
+        tray_mode = tray.get("mode", 0)
+        measuring_wheel = tray.get("measuring_wheel")
+
+        for i, label in enumerate(["A", "B", "C", "D"]):
+            slot_id = f"{tray_id}{label}"
+            color_hex = colors[i] if i < len(colors) else "-1"
+            mat_code = materials[i] if i < len(materials) else "-1"
+            if mat_code == "-1" or color_hex == "-1":
+                continue
+            norm_hex = color_hex
+            if norm_hex and norm_hex != "-1":
+                h = norm_hex.replace('#', '')
+                if len(h) == 7 and h.startswith('0'):
+                    h = h[1:]
+                norm_hex = f"#{h}" if len(h) == 6 else norm_hex
+            override_name = name_map.get(slot_id, "")
+            slot = {
+                "slot": slot_id,
+                "tray": tray_id,
+                "position": label,
+                "color_hex": norm_hex,
+                "material_code": mat_code,
+                "material_name": override_name or MATERIAL_MAP.get(mat_code, "Unknown"),
+                "remaining_pct": int(remaining_pct[i]) if i < len(remaining_pct) else 0,
+                "temperature": tray.get("temperature"),
+                "humidity": tray.get("dry_and_humidity"),
+            }
+
+            is_active = False
+            feed_state = "idle"
+
+            if is_printing and str(tray_mode) == "2" and str(tray_filament) == label:
+                is_active = True
+                active_slot_id = slot_id
+                if rack_velocity and isinstance(rack_velocity, (int, float)) and rack_velocity > 0:
+                    feed_state = "feeding"
+                else:
+                    feed_state = "active"
+
+            slot["is_active"] = is_active
+            slot["feed_state"] = feed_state
+
+            slots.append(_merge_slot(slot, overrides, library))
+
+    if active_slot_id and is_printing:
+        for s in slots:
+            if s["slot"] == active_slot_id:
+                s["is_active"] = True
+                if s["feed_state"] == "idle":
+                    s["feed_state"] = "active"
+
+    return slots
+
+
 @router.get("/slots")
-async def get_cfs_slots(request: Request, db: Session = Depends(get_db)) -> Dict[str, List[dict]]:
+async def get_cfs_slots(request: Request, db: Session = Depends(get_db)) -> dict:
+    from app.models.filament_roll import FilamentRoll
     session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
-    url = f"{moonraker_url}/printer/objects/query?filament_rack&box"
+    url = f"{moonraker_url}/printer/objects/query?filament_rack&box&print_stats"
     async with session.get(url) as resp:
         if resp.status != 200:
             raise HTTPException(status_code=502, detail="Moonraker request failed")
@@ -96,43 +189,20 @@ async def get_cfs_slots(request: Request, db: Session = Depends(get_db)) -> Dict
     box = result.get("box", {})
     filament_rack = result.get("filament_rack", {})
     same_material = box.get("same_material", [])
+    print_stats = result.get("print_stats", {})
+    is_printing = print_stats.get("state") == "printing"
 
     name_map = _build_name_map(same_material)
     overrides = _load_overrides(db)
+    library = {r.spool_id: r for r in db.query(FilamentRoll).filter(FilamentRoll.spool_id.isnot(None)).all()} if db.query(FilamentRoll).filter(FilamentRoll.spool_id.isnot(None)).first() else {}
+    slots = _build_slots(box, filament_rack, name_map, overrides, is_printing, library)
 
-    slots = []
-    for tray_id in ("T1", "T2", "T3", "T4"):
-        tray = box.get(tray_id, {})
-        if tray.get("state") == "None":
-            continue
-        remaining_pct = tray.get("remain_len", ["0", "0", "0", "0"])
-        colors = tray.get("color_value", ["-1", "-1", "-1", "-1"])
-        materials = tray.get("material_type", ["-1", "-1", "-1", "-1"])
-        for i, label in enumerate(["A", "B", "C", "D"]):
-            slot_id = f"{tray_id}{label}"
-            color_hex = colors[i] if i < len(colors) else "-1"
-            mat_code = materials[i] if i < len(materials) else "-1"
-            if mat_code == "-1" or color_hex == "-1":
-                continue
-            override_name = name_map.get(slot_id, "")
-            slot = {
-                "slot": slot_id,
-                "tray": tray_id,
-                "position": label,
-                "color_hex": color_hex,
-                "material_code": mat_code,
-                "material_name": override_name or MATERIAL_MAP.get(mat_code, "Unknown"),
-                "remaining_pct": int(remaining_pct[i]) if i < len(remaining_pct) else 0,
-                "temperature": tray.get("temperature"),
-                "humidity": tray.get("dry_and_humidity"),
-            }
-            slots.append(_merge_slot(slot, overrides))
-
-    return {"slots": slots}
+    return {"slots": slots, "is_printing": is_printing}
 
 
 @router.get("/active")
 async def get_active_slot(request: Request, db: Session = Depends(get_db)) -> dict:
+    from app.models.filament_roll import FilamentRoll
     session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
     url = f"{moonraker_url}/printer/objects/query?filament_rack&box&print_stats"
@@ -147,46 +217,100 @@ async def get_active_slot(request: Request, db: Session = Depends(get_db)) -> di
     print_stats = result.get("print_stats", {})
     same_material = box.get("same_material", [])
 
+    if print_stats.get("state") != "printing":
+        return {"active_slot": None, "is_printing": False, "feed_state": "idle", "slots": []}
+
+    name_map = _build_name_map(same_material)
+    overrides = _load_overrides(db)
+    library = {r.spool_id: r for r in db.query(FilamentRoll).filter(FilamentRoll.spool_id.isnot(None)).all()} if db.query(FilamentRoll).filter(FilamentRoll.spool_id.isnot(None)).first() else {}
+    slots = _build_slots(box, filament_rack, name_map, overrides, True, library)
+
+    active = None
+    feed_state = "idle"
+    for s in slots:
+        if s.get("is_active"):
+            active = s
+            feed_state = s.get("feed_state", "idle")
+            break
+
+    return {"active_slot": active, "slots": slots, "is_printing": True, "feed_state": feed_state}
+
+
+@router.post("/sync-library")
+async def sync_cfs_to_library(request: Request, db: Session = Depends(get_db)):
+    from app.models.filament_roll import FilamentRoll
+    session = await _get_session(request)
+    moonraker_url = _get_moonraker_url(db)
+    url = f"{moonraker_url}/printer/objects/query?filament_rack&box"
+    async with session.get(url) as resp:
+        if resp.status != 200:
+            raise HTTPException(status_code=502, detail="Moonraker request failed")
+        data = await resp.json()
+
+    result = data.get("result", {}).get("status", {})
+    box = result.get("box", {})
+    same_material = box.get("same_material", [])
     name_map = _build_name_map(same_material)
     overrides = _load_overrides(db)
 
-    if print_stats.get("state") != "printing":
-        return {"active_slot": None, "is_printing": False}
-
-    # filament_rack uses remain_material_* when a material is loaded
-    rack_color = filament_rack.get("remain_material_color") or filament_rack.get("color_value", "-1")
-    rack_mat = filament_rack.get("remain_material_type") or filament_rack.get("material_type", "-1")
-
-    slots = []
-    active = None
-
+    synced = []
     for tray_id in ("T1", "T2", "T3", "T4"):
         tray = box.get(tray_id, {})
-        if tray.get("state") == "None":
+        if tray.get("state") == "None" and str(tray.get("mode", "-1")) == "-1":
             continue
-        remaining_pct = tray.get("remain_len", ["0", "0", "0", "0"])
-        colors = tray.get("color_value", ["-1", "-1", "-1", "-1"])
-        materials = tray.get("material_type", ["-1", "-1", "-1", "-1"])
+        colors = tray.get("color_value", ["-1"] * 4)
+        materials = tray.get("material_type", ["-1"] * 4)
+        remain_lens = tray.get("remain_len", ["0"] * 4)
         for i, label in enumerate(["A", "B", "C", "D"]):
             slot_id = f"{tray_id}{label}"
-            color_hex = colors[i] if i < len(colors) else "-1"
             mat_code = materials[i] if i < len(materials) else "-1"
+            color_hex = colors[i] if i < len(colors) else "-1"
             if mat_code == "-1" or color_hex == "-1":
                 continue
-            override_name = name_map.get(slot_id, "")
-            entry = {
-                "slot": slot_id,
-                "tray": tray_id,
-                "position": label,
-                "color_hex": color_hex,
-                "material_code": mat_code,
-                "material_name": override_name or MATERIAL_MAP.get(mat_code, "Unknown"),
-                "remaining_pct": int(remaining_pct[i]) if i < len(remaining_pct) else 0,
-            }
-            merged = _merge_slot(entry, overrides)
-            slots.append(merged)
-            # Active matching uses raw CFS data, not overrides
-            if color_hex == rack_color and mat_code == rack_mat:
-                active = merged
 
-    return {"active_slot": active, "slots": slots, "is_printing": True}
+            override = overrides.get(slot_id)
+            mat_name = override.material_name if override and override.material_name else name_map.get(slot_id, "") or MATERIAL_MAP.get(mat_code, "Unknown")
+            spool_weight = override.spool_weight_g if override and override.spool_weight_g else 1000.0
+            cost_per_kg = override.cost_per_kg if override and override.cost_per_kg else None
+            remaining_pct = override.remaining_pct if override and override.remaining_pct is not None else int(remain_lens[i]) if i < len(remain_lens) else 100
+            remaining_g = round(remaining_pct / 100.0 * spool_weight, 1)
+            cfs_hex = color_hex
+            if cfs_hex and cfs_hex != "-1":
+                h = cfs_hex.replace('#', '')
+                if len(h) == 7 and h.startswith('0'):
+                    h = h[1:]
+                cfs_hex = f"#{h}" if len(h) == 6 else cfs_hex
+
+            roll = db.query(FilamentRoll).filter(FilamentRoll.spool_id == slot_id).first()
+            if roll:
+                roll.material = mat_name
+                roll.color_hex = cfs_hex
+                roll.total_weight_g = spool_weight
+                roll.remaining_weight_g = remaining_g
+                if cost_per_kg:
+                    roll.cost_per_kg = cost_per_kg
+                roll.location = f"CFS {tray_id}"
+            else:
+                roll = FilamentRoll(
+                    brand="CFS",
+                    material=mat_name,
+                    color_hex=cfs_hex,
+                    color_name=mat_name,
+                    total_weight_g=spool_weight,
+                    remaining_weight_g=remaining_g,
+                    spool_weight_g=0,
+                    cost_per_kg=cost_per_kg,
+                    spool_id=slot_id,
+                    location=f"CFS {tray_id}",
+                )
+                db.add(roll)
+            synced.append({
+                "slot_id": slot_id,
+                "material": mat_name,
+                "color_hex": cfs_hex,
+                "remaining_pct": remaining_pct,
+                "remaining_g": remaining_g,
+            })
+
+    db.commit()
+    return {"synced": synced, "count": len(synced)}

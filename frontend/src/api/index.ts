@@ -61,7 +61,7 @@ export async function fetchSpools(): Promise<Spool[]> {
   return data
 }
 
-export async function fetchCfsSlots(): Promise<{ slots: CfsSlot[] }> {
+export async function fetchCfsSlots(): Promise<{ slots: CfsSlot[]; is_printing: boolean }> {
   const { data } = await api.get('/api/v1/cfs/slots')
   return data
 }
@@ -148,6 +148,11 @@ export async function deleteFilamentRoll(id: number): Promise<void> {
   await api.delete(`/api/v1/filament/${id}`)
 }
 
+export async function weighFilamentRoll(id: number, measured_weight_g: number): Promise<FilamentRoll> {
+  const { data } = await api.post(`/api/v1/filament/${id}/weigh`, { measured_weight_g })
+  return data
+}
+
 export interface SummaryData {
   total_prints: number
   total_cost: number
@@ -196,6 +201,16 @@ export async function fetchMaintenance(): Promise<{ total_print_hours: number; i
 
 export async function markMaintenanceDone(key: string): Promise<any> {
   const { data } = await api.post(`/api/v1/analytics/maintenance/${key}/done`)
+  return data
+}
+
+export async function fetchSlotUsage(jobId: number): Promise<any[]> {
+  const { data } = await api.get(`/api/v1/analytics/slot-usage/${jobId}`)
+  return data
+}
+
+export async function syncCfsToLibrary(): Promise<{ synced: any[]; count: number }> {
+  const { data } = await api.post('/api/v1/cfs/sync-library')
   return data
 }
 
@@ -275,6 +290,79 @@ export async function register(username: string, password: string): Promise<{ ac
 
 export async function fetchAuthStatus(): Promise<{ initialized: boolean; authenticated: boolean; username: string | null; is_admin: boolean }> {
   const { data } = await api.get('/api/v1/auth/status')
+  return data
+}
+
+export interface SpoolmanDBFilament {
+  id: string
+  manufacturer: string
+  name: string
+  material: string
+  density: number
+  weight: number
+  spool_weight: number
+  diameter: number
+  color_hex: string | null
+  extruder_temp: number | null
+  bed_temp: number | null
+}
+
+export interface SpoolmanDBMaterial {
+  name: string
+  density: number
+  extruder_temp: number | null
+  bed_temp: number | null
+}
+
+export async function fetchSpoolmanDBMaterials(): Promise<SpoolmanDBMaterial[]> {
+  const { data } = await api.get('/api/v1/spoolmandb/materials')
+  return data
+}
+
+export async function fetchSpoolmanDBBrands(search?: string): Promise<string[]> {
+  const { data } = await api.get('/api/v1/spoolmandb/brands', { params: search ? { search } : {} })
+  return data
+}
+
+export async function fetchSpoolmanDBMaterialNames(): Promise<string[]> {
+  const { data } = await api.get('/api/v1/spoolmandb/material-names')
+  return data
+}
+
+export async function searchSpoolmanDBFilaments(params: {
+  brand?: string
+  material?: string
+  search?: string
+  limit?: number
+}): Promise<SpoolmanDBFilament[]> {
+  const { data } = await api.get('/api/v1/spoolmandb/filaments', { params })
+  return data
+}
+
+export interface DebugTestResult {
+  name: string
+  passed: boolean
+  detail: string
+  duration_ms: number
+}
+
+export async function fetchDebugTests(): Promise<Record<string, string[]>> {
+  const { data } = await api.get('/api/v1/debug/tests')
+  return data.categories
+}
+
+export async function runDebugTest(name: string): Promise<DebugTestResult> {
+  const { data } = await api.post('/api/v1/debug/run-test', { name })
+  return data
+}
+
+export async function runAllDebugTests(): Promise<{
+  results: DebugTestResult[]
+  total: number
+  passed: number
+  failed: number
+}> {
+  const { data } = await api.post('/api/v1/debug/run-all')
   return data
 }
 

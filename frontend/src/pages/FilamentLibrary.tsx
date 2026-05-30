@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { fetchFilamentRolls, createFilamentRoll, updateFilamentRoll, deleteFilamentRoll } from '../api'
+import { fetchFilamentRolls, createFilamentRoll, updateFilamentRoll, deleteFilamentRoll, weighFilamentRoll, searchSpoolmanDBFilaments, fetchSpoolmanDBBrands, fetchSpoolmanDBMaterialNames } from '../api'
 import type { FilamentRoll } from '../types'
+import type { SpoolmanDBFilament } from '../api'
 
 const MATERIALS = ['PLA', 'PLA+', 'PETG', 'ABS', 'ASA', 'TPU', 'NYLON', 'PC', 'HIPS', 'PVA', 'CUSTOM']
 const MATERIAL_COLORS: Record<string, string> = {
@@ -38,6 +39,7 @@ const FilamentLibrary: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<FilamentRoll | null>(null)
   const [adding, setAdding] = useState(false)
+  const [weighing, setWeighing] = useState<FilamentRoll | null>(null)
   const [materialFilter, setMaterialFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'grid' | 'table'>('grid')
@@ -141,6 +143,18 @@ const FilamentLibrary: React.FC = () => {
         </div>
       </div>
 
+      {weighing && (
+        <WeighDialog
+          roll={weighing}
+          onWeigh={async (id, measuredG) => {
+            const updated = await weighFilamentRoll(id, measuredG)
+            setRolls(prev => prev.map(r => r.id === id ? updated : r))
+            setWeighing(null)
+          }}
+          onClose={() => setWeighing(null)}
+        />
+      )}
+
       {(adding || editing) && (
         <SpoolForm
           roll={editing}
@@ -166,7 +180,7 @@ const FilamentLibrary: React.FC = () => {
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map(roll => (
-            <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false) }} />
+            <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false); setWeighing(null) }} onWeigh={() => { setWeighing(roll); setEditing(null); setAdding(false) }} />
           ))}
           {filtered.length === 0 && (
             <div className="col-span-full text-center py-12 text-surface-500">
@@ -212,7 +226,8 @@ const FilamentLibrary: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-right text-surface-300">{roll.cost_per_kg ? `$${roll.cost_per_kg.toFixed(2)}` : '—'}</td>
                       <td className="px-4 py-3 text-surface-400">{roll.location || '—'}{roll.spool_id ? ` / ${roll.spool_id}` : ''}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right flex gap-1 justify-end">
+                        <button onClick={e => { e.stopPropagation(); setWeighing(roll) }} className="px-2 py-1 text-xs bg-sky-900/40 hover:bg-sky-800/60 text-sky-300 rounded transition-colors">Weigh</button>
                         <button className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Edit</button>
                       </td>
                     </tr>
@@ -227,15 +242,15 @@ const FilamentLibrary: React.FC = () => {
   )
 }
 
-const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void }> = ({ roll, onEdit }) => {
+const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void; onWeigh: () => void }> = ({ roll, onEdit, onWeigh }) => {
   const pct = pctRemaining(roll)
   const matColor = MATERIAL_COLORS[roll.material] || '#6b7280'
 
   return (
-    <div className="card group hover:border-surface-600 transition-all cursor-pointer" onClick={onEdit}>
+    <div className="card group hover:border-surface-600 transition-all">
       <div className="card-body p-4">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={onEdit}>
             <div className="relative">
               <ProgressArc pct={pct} size={56} strokeWidth={4} />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -250,7 +265,9 @@ const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void }> = ({ roll,
               </span>
             </div>
           </div>
-          <div className="w-8 h-8 rounded-lg border border-surface-700" style={{ backgroundColor: roll.color_hex || '#666' }} />
+          <div className="flex items-center gap-1.5">
+            <div className="w-8 h-8 rounded-lg border border-surface-700" style={{ backgroundColor: roll.color_hex || '#666' }} />
+          </div>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -279,6 +296,184 @@ const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void }> = ({ roll,
         <div className="mt-2 w-full bg-surface-800 rounded-full h-1.5">
           <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
         </div>
+
+        <div className="mt-2 flex gap-1.5">
+          <button onClick={onEdit} className="flex-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Edit</button>
+          <button onClick={onWeigh} className="flex-1 px-2 py-1 text-xs bg-sky-900/40 hover:bg-sky-800/60 text-sky-300 rounded transition-colors flex items-center justify-center gap-1">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
+            </svg>
+            Weigh
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = ({ onSelect }) => {
+  const [filaments, setFilaments] = useState<SpoolmanDBFilament[]>([])
+  const [brands, setBrands] = useState<string[]>([])
+  const [dbMaterials, setDbMaterials] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [selectedBrand, setSelectedBrand] = useState('')
+  const [selectedMaterial, setSelectedMaterial] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
+
+  useEffect(() => {
+    fetchSpoolmanDBBrands().then(setBrands).catch(() => {})
+    fetchSpoolmanDBMaterialNames().then(setDbMaterials).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!search && !selectedBrand && !selectedMaterial) {
+      setFilaments([])
+      setHasSearched(false)
+      return
+    }
+    setHasSearched(true)
+    const t = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const results = await searchSpoolmanDBFilaments({
+          brand: selectedBrand || undefined,
+          material: selectedMaterial || undefined,
+          search: search || undefined,
+          limit: 50,
+        })
+        setFilaments(results)
+      } catch { setFilaments([]) }
+      finally { setLoading(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, selectedBrand, selectedMaterial])
+
+  const clearFilters = () => {
+    setSearch('')
+    setSelectedBrand('')
+    setSelectedMaterial('')
+  }
+
+  const activeFilters = [search, selectedBrand, selectedMaterial].filter(Boolean)
+
+  return (
+    <div className="mb-4 p-3 bg-surface-900/80 border border-surface-700 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <span className="text-xs font-medium text-surface-300">Search SpoolmanDB Catalog</span>
+          {loading && <div className="w-3 h-3 border border-accent-500 border-t-transparent rounded-full animate-spin" />}
+        </div>
+        {activeFilters.length > 0 && (
+          <button onClick={clearFilters} className="text-[10px] text-surface-500 hover:text-surface-300 transition-colors">Clear all</button>
+        )}
+      </div>
+      <div className="flex gap-2 mb-2">
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder='e.g. "Silk", "Matte", "Galaxy"...'
+          className="flex-1 bg-surface-800 border border-surface-700 rounded px-2 py-1.5 text-sm text-surface-200 placeholder-surface-500 focus:outline-none focus:border-accent-500" />
+        <select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}
+          className="bg-surface-800 border border-surface-700 rounded px-2 py-1.5 text-sm text-surface-300 focus:outline-none focus:border-accent-500 max-w-[180px]">
+          <option value="">All Brands</option>
+          {brands.slice(0, 80).map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select value={selectedMaterial} onChange={e => setSelectedMaterial(e.target.value)}
+          className="bg-surface-800 border border-surface-700 rounded px-2 py-1.5 text-sm text-surface-300 focus:outline-none focus:border-accent-500">
+          <option value="">All Materials</option>
+          {dbMaterials.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      </div>
+      {filaments.length > 0 && (
+        <div className="max-h-48 overflow-y-auto space-y-0.5">
+          {filaments.map(f => (
+            <button key={f.id} onClick={() => onSelect(f)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-700 transition-colors text-left">
+              {f.color_hex && <div className="w-4 h-4 rounded-sm shrink-0 border border-surface-600" style={{ backgroundColor: f.color_hex.startsWith('#') ? f.color_hex : `#${f.color_hex}` }} />}
+              <span className="text-xs text-surface-200 font-medium truncate">{f.manufacturer}</span>
+              <span className="text-xs text-surface-400 truncate">{f.name}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-700 text-surface-400 shrink-0">{f.material}</span>
+              <span className="text-[10px] text-surface-500 shrink-0">{f.weight}g</span>
+              {f.extruder_temp && <span className="text-[10px] text-surface-500 shrink-0">{f.extruder_temp}°C</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {hasSearched && !loading && filaments.length === 0 && (
+        <p className="text-xs text-surface-500 py-2">No filaments found — try adjusting filters</p>
+      )}
+      {!hasSearched && (
+        <p className="text-xs text-surface-500 py-2">Select a brand, material, or type a keyword to search</p>
+      )}
+    </div>
+  )
+}
+
+const WeighDialog: React.FC<{
+  roll: FilamentRoll
+  onWeigh: (id: number, measuredG: number) => Promise<void>
+  onClose: () => void
+}> = ({ roll, onWeigh, onClose }) => {
+  const [measuredG, setMeasuredG] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const tare = roll.spool_weight_g || 0
+  const measured = parseFloat(measuredG) || 0
+  const remaining = Math.max(0, measured - tare)
+  const pct = roll.total_weight_g > 0 ? Math.min(100, Math.round((remaining / roll.total_weight_g) * 100)) : 0
+
+  return (
+    <div className="card border border-sky-600/30">
+      <div className="card-header flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+          <svg className="w-4 h-4 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
+          </svg>
+          Weigh Spool
+        </h2>
+        <button onClick={onClose} className="text-surface-500 hover:text-surface-300 text-xs">Close</button>
+      </div>
+      <div className="card-body space-y-3">
+        <p className="text-xs text-surface-400">
+          {roll.brand} {roll.color_name || ''} — {roll.material}
+        </p>
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <div className="bg-surface-800 rounded-lg p-2 text-center">
+            <div className="text-surface-500 mb-0.5">Tare (spool)</div>
+            <div className="text-white font-medium">{tare > 0 ? `${tare}g` : 'Not set'}</div>
+          </div>
+          <div className="bg-surface-800 rounded-lg p-2 text-center">
+            <div className="text-surface-500 mb-0.5">Measured</div>
+            <div className="text-sky-300 font-medium">{measuredG ? `${measured}g` : '—'}</div>
+          </div>
+          <div className="bg-surface-800 rounded-lg p-2 text-center">
+            <div className="text-surface-500 mb-0.5">Remaining</div>
+            <div className={`font-medium`} style={{ color: pctColor(pct) }}>
+              {measuredG ? `${remaining.toFixed(1)}g (${pct}%)` : '—'}
+            </div>
+          </div>
+        </div>
+        {tare === 0 && (
+          <p className="text-[10px] text-amber-400">No tare weight set — edit the spool to set the empty spool weight for accurate readings</p>
+        )}
+        <div>
+          <label className="text-xs text-surface-500 block mb-1">Scale reading (g) — filament + spool on scale</label>
+          <input type="number" value={measuredG} onChange={e => setMeasuredG(e.target.value)} placeholder="e.g. 845"
+            className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-surface-200 placeholder-surface-500 focus:outline-none focus:border-sky-500" />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={async () => {
+            if (!measuredG || measured <= 0) return
+            setSaving(true)
+            await onWeigh(roll.id, measured)
+            setSaving(false)
+          }} disabled={saving || !measuredG || measured <= 0}
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
+            {saving ? 'Saving...' : 'Update Remaining'}
+          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-surface-700 hover:bg-surface-600 text-surface-300 text-sm rounded-lg transition-colors">Cancel</button>
+        </div>
       </div>
     </div>
   )
@@ -296,6 +491,7 @@ const SpoolForm: React.FC<{
     color_name: roll?.color_name || '',
     color_hex: roll?.color_hex || '#ffffff',
     total_weight_g: roll?.total_weight_g || 1000,
+    spool_weight_g: roll?.spool_weight_g || 0,
     remaining_weight_g: roll?.remaining_weight_g || 1000,
     cost_per_kg: roll?.cost_per_kg || 24.0,
     location: roll?.location || '',
@@ -303,18 +499,46 @@ const SpoolForm: React.FC<{
     spool_id: roll?.spool_id || '',
   })
   const [saving, setSaving] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
+
+  const applyFilament = (f: SpoolmanDBFilament) => {
+    const hex = f.color_hex
+      ? (f.color_hex.startsWith('#') ? f.color_hex : `#${f.color_hex}`)
+      : undefined
+    setForm(p => ({
+      ...p,
+      brand: f.manufacturer,
+      material: f.material.toUpperCase().replace(/[^A-Z0-9+]/g, '') || p.material,
+      color_name: f.name || p.color_name,
+      color_hex: hex || p.color_hex,
+      total_weight_g: f.weight || 1000,
+      spool_weight_g: f.spool_weight || 0,
+      remaining_weight_g: f.weight || 1000,
+    }))
+    setShowPicker(false)
+  }
 
   return (
     <div className="card border border-accent-600/30">
       <div className="card-header flex items-center justify-between">
         <h2 className="text-sm font-semibold text-white">{roll ? 'Edit Spool' : 'Add New Spool'}</h2>
         <div className="flex items-center gap-2">
+          {!roll && (
+            <button onClick={() => setShowPicker(!showPicker)}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors flex items-center gap-1 ${showPicker ? 'bg-accent-600 text-white' : 'bg-surface-700 hover:bg-surface-600 text-surface-300'}`}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              SpoolmanDB
+            </button>
+          )}
           <div className="w-6 h-6 rounded border border-surface-600" style={{ backgroundColor: form.color_hex }} />
           <input type="color" value={form.color_hex} onChange={e => setForm(p => ({ ...p, color_hex: e.target.value }))}
             className="w-6 h-6 bg-transparent border-0 cursor-pointer rounded" />
         </div>
       </div>
       <div className="card-body">
+        {showPicker && <FilamentPicker onSelect={applyFilament} />}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Input label="Brand" value={form.brand} onChange={v => setForm(p => ({ ...p, brand: v }))} />
           <div>
@@ -326,6 +550,7 @@ const SpoolForm: React.FC<{
           </div>
           <Input label="Color Name" value={form.color_name} onChange={v => setForm(p => ({ ...p, color_name: v }))} />
           <Input label="Total Weight (g)" type="number" value={String(form.total_weight_g)} onChange={v => setForm(p => ({ ...p, total_weight_g: Number(v) }))} />
+          <Input label="Empty Spool / Tare (g)" type="number" value={String(form.spool_weight_g)} onChange={v => setForm(p => ({ ...p, spool_weight_g: Number(v) }))} />
           <Input label="Remaining (g)" type="number" value={String(form.remaining_weight_g)} onChange={v => setForm(p => ({ ...p, remaining_weight_g: Number(v) }))} />
           <Input label="Cost/kg ($)" type="number" value={String(form.cost_per_kg)} onChange={v => setForm(p => ({ ...p, cost_per_kg: Number(v) }))} />
           <Input label="Location" value={form.location} onChange={v => setForm(p => ({ ...p, location: v }))} />

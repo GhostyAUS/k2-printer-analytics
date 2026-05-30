@@ -97,8 +97,12 @@ export interface CfsSlot {
   material_code: string
   material_name: string
   remaining_pct: number
+  remaining_weight_g?: number
+  total_weight_g?: number
   temperature: string | null
   humidity: string | null
+  is_active?: boolean
+  feed_state?: 'idle' | 'active' | 'feeding'
   has_override?: boolean
   cost_per_kg?: number | null
   spool_weight_g?: number | null
@@ -124,6 +128,7 @@ export interface FilamentRoll {
   color_name: string | null
   color_hex: string | null
   total_weight_g: number
+  spool_weight_g: number
   remaining_weight_g: number
   cost_per_kg: number | null
   purchase_date: string | null

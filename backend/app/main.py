@@ -25,6 +25,8 @@ from app.api.routes.power import router as power_router
 from app.api.routes.settings import router as settings_router
 from app.api.routes.filament import router as filament_router
 from app.api.routes.files import router as files_router
+from app.api.routes.spoolmandb import router as spoolmandb_router
+from app.api.routes.debug import router as debug_router
 from app.websocket.handlers import handle_websocket
 from app.services.print_tracker import print_tracker
 from app.core.database import Base, engine
@@ -112,6 +114,8 @@ def create_app() -> FastAPI:
     app.include_router(settings_router, prefix="/api/v1")
     app.include_router(filament_router, prefix="/api/v1")
     app.include_router(files_router, prefix="/api/v1")
+    app.include_router(spoolmandb_router, prefix="/api/v1")
+    app.include_router(debug_router, prefix="/api/v1")
     
     return app
 

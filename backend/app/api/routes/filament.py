@@ -16,6 +16,7 @@ class FilamentRollCreate(BaseModel):
     color_name: Optional[str] = None
     color_hex: Optional[str] = None
     total_weight_g: float = 1000.0
+    spool_weight_g: float = 0.0
     remaining_weight_g: float = 1000.0
     cost_per_kg: Optional[float] = None
     purchase_date: Optional[datetime] = None
@@ -30,6 +31,7 @@ class FilamentRollUpdate(BaseModel):
     color_name: Optional[str] = None
     color_hex: Optional[str] = None
     total_weight_g: Optional[float] = None
+    spool_weight_g: Optional[float] = None
     remaining_weight_g: Optional[float] = None
     cost_per_kg: Optional[float] = None
     purchase_date: Optional[datetime] = None
@@ -47,6 +49,7 @@ class FilamentRollResponse(BaseModel):
     color_name: Optional[str] = None
     color_hex: Optional[str] = None
     total_weight_g: float
+    spool_weight_g: float
     remaining_weight_g: float
     cost_per_kg: Optional[float] = None
     purchase_date: Optional[datetime] = None
@@ -56,6 +59,10 @@ class FilamentRollResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class WeighRequest(BaseModel):
+    measured_weight_g: float
 
 
 @router.get("/", response_model=List[FilamentRollResponse])
@@ -87,6 +94,20 @@ def update_roll(roll_id: int, data: FilamentRollUpdate, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Filament roll not found")
     for key, val in data.model_dump(exclude_unset=True).items():
         setattr(roll, key, val)
+    db.commit()
+    db.refresh(roll)
+    return roll
+
+
+@router.post("/{roll_id}/weigh", response_model=FilamentRollResponse)
+def weigh_roll(roll_id: int, data: WeighRequest, db: Session = Depends(get_db)):
+    roll = db.query(FilamentRoll).filter(FilamentRoll.id == roll_id).first()
+    if not roll:
+        raise HTTPException(status_code=404, detail="Filament roll not found")
+    remaining = data.measured_weight_g - roll.spool_weight_g
+    if remaining < 0:
+        remaining = 0
+    roll.remaining_weight_g = round(remaining, 1)
     db.commit()
     db.refresh(roll)
     return roll

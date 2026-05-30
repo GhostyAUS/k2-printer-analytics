@@ -62,16 +62,29 @@ const Dashboard: React.FC = () => {
   }
 
   const colorFromHex = (hex: string): string => {
-    if (!hex || hex === '-1' || hex.length < 6) return '#52525b'
-    const rgb = hex.replace('0x', '').replace('#', '')
-    const r = parseInt(rgb.substring(0, 2), 16)
-    const g = parseInt(rgb.substring(rgb.length > 4 ? 2 : 0, rgb.length > 4 ? 4 : 2), 16)
-    const b = parseInt(rgb.substring(rgb.length > 4 ? 4 : 0, rgb.length > 4 ? 6 : 2), 16)
+    if (!hex || hex === '-1') return '#52525b'
+    let h = hex.replace('#', '')
+    if (h.length === 7 && h.startsWith('0')) h = h.substring(1)
+    if (h.length !== 6) return '#52525b'
+    const r = parseInt(h.substring(0, 2), 16)
+    const g = parseInt(h.substring(2, 4), 16)
+    const b = parseInt(h.substring(4, 6), 16)
     if (isNaN(r) || isNaN(g) || isNaN(b)) return '#52525b'
     return `rgb(${r}, ${g}, ${b})`
   }
 
   const maxW = powerHistory.length > 0 ? Math.max(...powerHistory.map(p => p.wattage), 1) : 1
+  const avgW = powerHistory.length > 0 ? powerHistory.reduce((s, p) => s + p.wattage, 0) / powerHistory.length : 0
+  const niceMax = Math.ceil(maxW / 50) * 50
+  const yTicks = [0, Math.round(niceMax / 4), Math.round(niceMax / 2), Math.round(niceMax * 3 / 4), niceMax]
+
+  const xTickCount = 7
+  const xTicks = Array.from({ length: xTickCount }, (_, i) => {
+    const minAgo = 60 - (i * 60 / (xTickCount - 1))
+    if (minAgo === 0) return 'Now'
+    if (minAgo < 1) return '<1m'
+    return `${Math.round(minAgo)}m`
+  })
 
   return (
     <div className="space-y-6">
@@ -96,10 +109,21 @@ const Dashboard: React.FC = () => {
             <span className="text-sm font-bold text-accent-400">{progress.toFixed(1)}%</span>
           </div>
           <div className="card-body">
-            <div className="w-full bg-surface-700 rounded-full h-2.5 mb-4">
-              <div className="bg-accent-500 h-2.5 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+            {progress >= 100 ? (
+              <div className="mb-4">
+                <div className="w-full bg-surface-700 rounded-full h-2.5">
+                  <div className="bg-rose-500 h-2.5 rounded-full transition-all" style={{ width: '100%' }} />
+                </div>
+                <p className="text-xs text-rose-400 mt-1.5 font-medium">
+                  Exceeds estimation by {meta?.time_remaining_seconds ? formatDuration(Math.abs(meta.time_remaining_seconds)) : '—'}
+                </p>
+              </div>
+            ) : (
+              <div className="w-full bg-surface-700 rounded-full h-2.5 mb-4">
+                <div className="bg-accent-500 h-2.5 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
+              </div>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
               <div>
                 <p className="text-xs text-surface-500 mb-1">Remaining</p>
                 <p className="text-surface-200 font-medium">{meta?.time_remaining_seconds ? formatDuration(meta.time_remaining_seconds) : '—'}</p>
@@ -109,11 +133,28 @@ const Dashboard: React.FC = () => {
                 <p className="text-surface-200 font-medium">{meta?.layer != null ? `${meta.layer}/${meta.layer_count}` : '—'}</p>
               </div>
               <div>
+                <p className="text-xs text-surface-500 mb-1">Active CFS Slot</p>
+                {activeSlot ? (
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full border ${activeSlot.is_active ? 'border-sky-400 animate-pulse' : 'border-surface-600'}`} style={{ backgroundColor: colorFromHex(activeSlot.color_hex) }} />
+                    <span className="text-surface-200 font-medium">{activeSlot.slot}</span>
+                    {activeSlot.feed_state && activeSlot.feed_state !== 'idle' && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        activeSlot.feed_state === 'feeding'
+                          ? 'bg-emerald-500/20 text-emerald-400 animate-pulse'
+                          : 'bg-sky-500/20 text-sky-400'
+                      }`}>
+                        {activeSlot.feed_state}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-surface-200 font-medium">{meta?.filament_type || '—'}</p>
+                )}
+              </div>
+              <div>
                 <p className="text-xs text-surface-500 mb-1">Material</p>
-                <div className="flex items-center gap-1.5">
-                  {activeSlot && <div className="w-3 h-3 rounded-full border border-surface-600" style={{ backgroundColor: colorFromHex(activeSlot.color_hex) }} />}
-                  <p className="text-surface-200 font-medium">{meta?.filament_type || activeSlot?.material_name || '—'}</p>
-                </div>
+                <p className="text-surface-200 font-medium">{activeSlot?.material_name || meta?.filament_type || '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-surface-500 mb-1">Power</p>
@@ -161,15 +202,29 @@ const Dashboard: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           {powerHistory.length > 0 && (
             <div className="card">
-              <div className="card-header"><h2 className="text-sm font-semibold text-white">Power Draw (Last Hour)</h2></div>
+              <div className="card-header flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">Power Draw (Last Hour)</h2>
+                <span className="text-xs text-amber-400">Avg: {avgW.toFixed(0)} W</span>
+              </div>
               <div className="card-body">
-                <div className="h-32 flex items-end gap-px">
-                  {powerHistory.filter((_, i) => i % Math.max(1, Math.floor(powerHistory.length / 120)) === 0).map((p, i) => (
-                    <div key={i} className="flex-1 bg-accent-500/60 rounded-t-sm min-w-px" style={{ height: `${(p.wattage / maxW) * 100}%` }} title={`${p.wattage.toFixed(0)}W`} />
-                  ))}
+                <div className="relative h-36">
+                  <div className="absolute inset-0 flex items-end">
+                    <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-[10px] text-surface-500 text-right pr-1">
+                      {yTicks.slice().reverse().map((t, i) => (
+                        <span key={i}>{t}W</span>
+                      ))}
+                    </div>
+                    <div className="ml-10 flex-1 flex items-end gap-px h-full">
+                      {powerHistory.map((p, i) => (
+                        <div key={i} className="flex-1 bg-accent-500/60 rounded-t-sm min-w-px" style={{ height: `${(p.wattage / niceMax) * 100}%` }} title={`${p.wattage.toFixed(0)}W`} />
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between mt-1 text-[10px] text-surface-500">
-                  <span>60m ago</span><span>Now</span>
+                <div className="ml-10 flex justify-between mt-1 text-[10px] text-surface-500">
+                  {xTicks.map((label, i) => (
+                    <span key={i}>{label}</span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -247,17 +302,36 @@ const Dashboard: React.FC = () => {
           )}
 
           <div className="card">
-            <div className="card-header"><h2 className="text-sm font-semibold text-white">CFS Slots</h2></div>
+            <div className="card-header flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">CFS Slots</h2>
+              {cfsSlots.some(s => s.is_active) && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-sky-900/30 border border-sky-500/20 rounded">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] text-sky-300 font-medium">
+                    {cfsSlots.find(s => s.is_active)?.slot} {cfsSlots.find(s => s.is_active)?.feed_state}
+                  </span>
+                </div>
+              )}
+            </div>
             <div className="card-body p-3">
               <div className="grid grid-cols-2 gap-2">
                 {cfsSlots.slice(0, 8).map(slot => (
-                  <div key={slot.slot} className="flex items-center gap-2 p-2 rounded-lg bg-surface-800/30">
-                    <div className="w-4 h-4 rounded-full border border-surface-600 shrink-0" style={{ backgroundColor: colorFromHex(slot.color_hex) }} />
+                  <div key={slot.slot} className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
+                    slot.is_active
+                      ? 'bg-sky-900/30 ring-1 ring-sky-500/40'
+                      : 'bg-surface-800/30'
+                  }`}>
+                    <div className={`w-4 h-4 rounded-full border shrink-0 ${
+                      slot.is_active ? 'border-sky-400 animate-pulse' : 'border-surface-600'
+                    }`} style={{ backgroundColor: colorFromHex(slot.color_hex) }} />
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-surface-200">{slot.slot}</p>
                       <p className="text-[10px] text-surface-500 truncate">{slot.material_name}</p>
                     </div>
-                    <span className="ml-auto text-[10px] text-surface-500">{slot.remaining_pct}%</span>
+                    <div className="ml-auto text-right">
+                      <span className={`text-[10px] ${slot.remaining_pct <= 20 ? 'text-amber-400' : slot.is_active ? 'text-sky-300 font-medium' : 'text-surface-500'}`}>{slot.remaining_pct}%</span>
+                      {slot.remaining_weight_g != null && <p className="text-[9px] text-surface-600">{slot.remaining_weight_g}g</p>}
+                    </div>
                   </div>
                 ))}
               </div>
