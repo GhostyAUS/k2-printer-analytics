@@ -88,7 +88,7 @@ const SetupWizard: React.FC = () => {
           meross_device_name: merossName,
         }),
       })
-      setTimeout(() => window.location.replace('/'), 500)
+      setTimeout(() => { window.location.href = '/' }, 500)
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Failed to save configuration')
     }

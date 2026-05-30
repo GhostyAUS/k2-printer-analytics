@@ -44,11 +44,15 @@ function AuthProvider({ children }: { children: ReactNode }) {
       if (s.authenticated) {
         const stored = localStorage.getItem('k2_user')
         const user = stored ? JSON.parse(stored) : null
-        setAuth({ initialized: true, authenticated: true, username: s.username || user?.username, is_admin: s.is_admin, loading: false })
+        setAuth({ initialized: true, authenticated: true, username: s.username || user?.username, is_admin: s.is_admin ?? user?.is_admin, loading: false })
       } else {
         localStorage.removeItem('k2_token')
         localStorage.removeItem('k2_user')
-        setAuth({ initialized: s.initialized, authenticated: false, username: null, is_admin: false, loading: false })
+        fetchAuthStatus().then(s2 => {
+          setAuth({ initialized: s2.initialized, authenticated: false, username: null, is_admin: false, loading: false })
+        }).catch(() => {
+          setAuth({ initialized: false, authenticated: false, username: null, is_admin: false, loading: false })
+        })
       }
     }).catch(() => {
       localStorage.removeItem('k2_token')
@@ -76,13 +80,40 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function PublicOnlyRoute({ children }: { children: ReactNode }) {
+  const auth = useAuth()
+  if (auth.loading) {
+    return <div className="min-h-screen bg-surface-950 flex items-center justify-center">
+      <div className="text-surface-400 text-lg">Loading...</div>
+    </div>
+  }
+  if (auth.authenticated) {
+    return <Navigate to="/" replace />
+  }
+  if (auth.initialized) {
+    return <>{children}</>
+  }
+  return <>{children}</>
+}
+
+function SetupRoute({ children }: { children: ReactNode }) {
+  const auth = useAuth()
+  if (auth.loading) {
+    return <>{children}</>
+  }
+  if (auth.authenticated) {
+    return <Navigate to="/" replace />
+  }
+  return <>{children}</>
+}
+
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/setup" element={<SetupWizard />} />
+          <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+          <Route path="/setup" element={<SetupRoute><SetupWizard /></SetupRoute>} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="print-jobs" element={<PrintJobs />} />
