@@ -30,36 +30,33 @@ export const useAuth = () => useContext(AuthContext)
 function AuthProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>({ initialized: false, authenticated: false, username: null, is_admin: false, loading: true })
 
-  useEffect(() => {
+  const checkAuth = async (retries = 5) => {
     const token = localStorage.getItem('k2_token')
-    if (!token) {
-      fetchAuthStatus().then(s => {
-        setAuth({ initialized: s.initialized, authenticated: false, username: null, is_admin: false, loading: false })
-      }).catch(() => {
-        setAuth({ initialized: false, authenticated: false, username: null, is_admin: false, loading: false })
-      })
-      return
-    }
-    fetchAuthStatus().then(s => {
-      if (s.authenticated) {
-        const stored = localStorage.getItem('k2_user')
-        const user = stored ? JSON.parse(stored) : null
-        setAuth({ initialized: true, authenticated: true, username: s.username || user?.username, is_admin: s.is_admin ?? user?.is_admin, loading: false })
-      } else {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const s = await fetchAuthStatus()
+        if (!token) {
+          setAuth({ initialized: s.initialized, authenticated: false, username: null, is_admin: false, loading: false })
+          return
+        }
+        if (s.authenticated) {
+          const stored = localStorage.getItem('k2_user')
+          const user = stored ? JSON.parse(stored) : null
+          setAuth({ initialized: true, authenticated: true, username: s.username || user?.username, is_admin: s.is_admin ?? user?.is_admin, loading: false })
+          return
+        }
         localStorage.removeItem('k2_token')
         localStorage.removeItem('k2_user')
-        fetchAuthStatus().then(s2 => {
-          setAuth({ initialized: s2.initialized, authenticated: false, username: null, is_admin: false, loading: false })
-        }).catch(() => {
-          setAuth({ initialized: false, authenticated: false, username: null, is_admin: false, loading: false })
-        })
+        setAuth({ initialized: s.initialized, authenticated: false, username: null, is_admin: false, loading: false })
+        return
+      } catch {
+        if (i < retries - 1) await new Promise(r => setTimeout(r, 1000 * (i + 1)))
       }
-    }).catch(() => {
-      localStorage.removeItem('k2_token')
-      localStorage.removeItem('k2_user')
-      setAuth({ initialized: false, authenticated: false, username: null, is_admin: false, loading: false })
-    })
-  }, [])
+    }
+    setAuth({ initialized: false, authenticated: false, username: null, is_admin: false, loading: false })
+  }
+
+  useEffect(() => { checkAuth() }, [])
 
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
 }
