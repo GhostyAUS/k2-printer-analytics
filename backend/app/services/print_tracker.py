@@ -101,6 +101,27 @@ class MoonrakerPrintTracker:
                 "estimated_filament_g": estimated_filament_g,
                 "filament_type": self._parse_material(print_stats["filename"]),
             })
+
+            try:
+                from app.api.routes.files import _find_thumbnail_path
+                import aiohttp
+                from app.services.moonraker import _get_moonraker_config
+                h, p = _get_moonraker_config()
+                murl = f"http://{h}:{p}"
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as ts:
+                    thumb = await _find_thumbnail_path(ts, murl, print_stats["filename"])
+                if thumb:
+                    job.thumbnail_path = thumb
+                    db2 = SessionLocal()
+                    try:
+                        db2.query(PrintJob).filter(PrintJob.id == job.id).update({"thumbnail_path": thumb})
+                        db2.commit()
+                    finally:
+                        db2.close()
+                    logger.info(f"Thumbnail saved for job {job.id}: {thumb}")
+            except Exception as te:
+                logger.warning(f"Thumbnail lookup failed for {print_stats['filename']}: {te}")
+
             self.active_job_id = job.id
             self.active_filename = print_stats["filename"]
 

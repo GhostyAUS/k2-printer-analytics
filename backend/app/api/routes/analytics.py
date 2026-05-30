@@ -10,6 +10,7 @@ from app.models.print_job import PrintJob, PrintStatus
 from app.models.power_log import PowerLog
 from app.models.filament_roll import FilamentRoll
 from datetime import datetime, timedelta, timezone
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -346,10 +347,8 @@ def get_report(period: str = Query("weekly", regex="^(daily|weekly|monthly)$"), 
         end = start + timedelta(days=1)
         label = start.strftime("%Y-%m-%d")
     elif period == "weekly":
-        days_since_monday = start.weekday() if offset == 0 else 0
-        start = (now - timedelta(days=offset * 7 + days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
-        if offset == 0:
-            start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        this_monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = this_monday - timedelta(weeks=offset)
         end = start + timedelta(days=7)
         label = f"{start.strftime('%b %d')} – {(end - timedelta(days=1)).strftime('%b %d')}"
     else:

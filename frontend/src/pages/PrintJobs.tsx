@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { fetchJobsPaginated, fetchSlotUsage, type PaginatedJobs } from '../api'
+import { fetchJobsPaginated, fetchSlotUsage, getThumbnailUrl, type PaginatedJobs } from '../api'
 
 type SlotUsage = {
   slot_id: string
@@ -176,6 +176,7 @@ const PrintJobs: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-surface-800/30 text-xs text-surface-400 uppercase tracking-wider">
+                <th className="px-4 py-3 font-medium w-12">Preview</th>
                 <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-surface-200" onClick={() => handleSort('filename')}>
                   <span className="flex items-center gap-1">File <span className={sortIcon('filename')}>{sortBy === 'filename' ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}</span></span>
                 </th>
@@ -219,6 +220,15 @@ const PrintJobs: React.FC = () => {
                       className={`border-t border-surface-700/20 hover:bg-surface-800/30 transition-colors cursor-pointer ${isExpanded ? 'bg-surface-800/20' : ''}`}
                       onClick={() => toggleExpand(job.id)}
                     >
+                      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                        <img
+                          src={job.thumbnail_path || getThumbnailUrl(job.filename)}
+                          alt=""
+                          className="w-10 h-10 object-contain rounded bg-surface-800 border border-surface-700"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          loading="lazy"
+                        />
+                      </td>
                       <td className="px-4 py-3 text-surface-200 font-medium max-w-[200px] truncate" title={job.filename}>
                         {job.filename.replace(/\.gcode$/i, '')}
                       </td>
@@ -259,31 +269,39 @@ const PrintJobs: React.FC = () => {
                     </tr>
                     {isExpanded && (
                       <tr className="bg-surface-900/50">
-                        <td colSpan={11} className="px-6 py-4">
-                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-xs mb-4">
-                            <div>
-                              <span className="text-surface-500 block">Est. Filament</span>
-                              <span className="text-surface-200">{job.estimated_filament_g ? `${job.estimated_filament_g.toFixed(0)} g` : '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-surface-500 block">Filament Length</span>
-                              <span className="text-surface-200">{job.filament_length_mm ? `${(job.filament_length_mm / 1000).toFixed(1)} m` : '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-surface-500 block">Power Used</span>
-                              <span className="text-surface-200">{job.total_power_kwh ? `${job.total_power_kwh.toFixed(3)} kWh` : '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-surface-500 block">Started</span>
-                              <span className="text-surface-200">{job.start_time ? new Date(job.start_time).toLocaleString() : '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-surface-500 block">Ended</span>
-                              <span className="text-surface-200">{job.end_time ? new Date(job.end_time).toLocaleString() : '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-surface-500 block">Job ID</span>
-                              <span className="text-surface-200">#{job.id}</span>
+                        <td colSpan={12} className="px-6 py-4">
+                          <div className="flex gap-4 mb-4">
+                            <img
+                              src={job.thumbnail_path || getThumbnailUrl(job.filename)}
+                              alt="Print preview"
+                              className="w-28 h-28 object-contain rounded-lg bg-surface-800 border border-surface-700 shrink-0"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            />
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-xs flex-1">
+                              <div>
+                                <span className="text-surface-500 block">Est. Filament</span>
+                                <span className="text-surface-200">{job.estimated_filament_g ? `${job.estimated_filament_g.toFixed(0)} g` : '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-surface-500 block">Filament Length</span>
+                                <span className="text-surface-200">{job.filament_length_mm ? `${(job.filament_length_mm / 1000).toFixed(1)} m` : '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-surface-500 block">Power Used</span>
+                                <span className="text-surface-200">{job.total_power_kwh ? `${job.total_power_kwh.toFixed(3)} kWh` : '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-surface-500 block">Started</span>
+                                <span className="text-surface-200">{job.start_time ? new Date(job.start_time).toLocaleString() : '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-surface-500 block">Ended</span>
+                                <span className="text-surface-200">{job.end_time ? new Date(job.end_time).toLocaleString() : '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-surface-500 block">Job ID</span>
+                                <span className="text-surface-200">#{job.id}</span>
+                              </div>
                             </div>
                           </div>
                           {slotUsages[job.id] && slotUsages[job.id].length > 0 && (
@@ -314,7 +332,7 @@ const PrintJobs: React.FC = () => {
               })}
               {data?.items.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-surface-500">
+                  <td colSpan={12} className="px-4 py-12 text-center text-surface-500">
                     {search ? `No jobs matching "${search}"` : 'No print jobs found'}
                   </td>
                 </tr>

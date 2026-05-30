@@ -3,7 +3,7 @@ import { getExportLogsUrl } from '../api'
 
 const GITHUB_URL = 'https://github.com/GhostyAUS/k2-printer-analytics'
 
-type SectionId = 'dashboard' | 'print-jobs' | 'spools' | 'filament' | 'camera' | 'files' | 'analytics' | 'compare' | 'system' | 'settings' | 'diagnostics' | 'troubleshooting' | 'export'
+type SectionId = 'dashboard' | 'print-jobs' | 'spools' | 'filament' | 'camera' | 'files' | 'analytics' | 'reports' | 'compare' | 'system' | 'settings' | 'diagnostics' | 'troubleshooting' | 'export'
 
 const sections: { id: SectionId; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -13,6 +13,7 @@ const sections: { id: SectionId; label: string; icon: string }[] = [
   { id: 'camera', label: 'Camera', icon: 'M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z' },
   { id: 'files', label: 'Files', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z' },
   { id: 'analytics', label: 'Analytics', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+  { id: 'reports', label: 'Reports', icon: 'M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z' },
   { id: 'compare', label: 'Compare', icon: 'M7.5 3.75L6 9l1.5 5.25M16.5 3.75L18 9l-1.5 5.25M3.75 9h16.5M6 14.25h12m-9 0v3.75m6-3.75v3.75' },
   { id: 'system', label: 'System', icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25' },
   { id: 'settings', label: 'Settings', icon: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.18.108.352.228.513.359l1.226-.166c.54-.073 1.076.217 1.31.68l1.297 2.247c.247.504.115 1.118-.314 1.475l-.986.773a5.86 5.86 0 010 1.4l.986.773c.429.357.561.97.314 1.475l-1.297 2.247a1.125 1.125 0 01-1.31.68l-1.226-.165a5.836 5.836 0 01-.513.358l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281a5.836 5.836 0 01-.513-.358l-1.226.165a1.125 1.125 0 01-1.31-.68L4.594 13.16a1.125 1.125 0 01.314-1.475l.986-.773a5.86 5.86 0 010-1.4l-.986-.773a1.125 1.125 0 01-.314-1.475l1.297-2.247a1.125 1.125 0 011.31-.68l1.226.165c.161-.13.331-.25.513-.358l.213-1.281z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
@@ -68,6 +69,7 @@ const Help: React.FC = () => {
           {activeSection === 'camera' && <CameraHelp />}
           {activeSection === 'files' && <FilesHelp />}
           {activeSection === 'analytics' && <AnalyticsHelp />}
+          {activeSection === 'reports' && <ReportsHelp />}
           {activeSection === 'compare' && <CompareHelp />}
           {activeSection === 'system' && <SystemHelp />}
           {activeSection === 'settings' && <SettingsHelp />}
@@ -98,14 +100,17 @@ const DashboardHelp = () => (
     <P>The Dashboard is your home screen, giving you a real-time overview of your K2 printer and power usage.</P>
     <H3>Key Features</H3>
     <ul><Li><strong>Live Status</strong> — Shows current printer state (printing, standby, error), active filename, and print progress with estimated time remaining.</Li>
+    <Li><strong>Print Thumbnail</strong> — When a print is active, a preview thumbnail is displayed from the printer's G-code metadata or 3MF project file. This helps identify prints at a glance.</Li>
     <Li><strong>Power Monitor</strong> — Real-time wattage graph from your Meross smart plug. Shows live power draw, average watts, and the history over the selected time range. Y-axis shows wattage, X-axis shows time markers.</Li>
     <Li><strong>Summary Cards</strong> — Quick stats for total prints, monthly cost, weekly activity, and filament usage.</Li>
     <Li><strong>CFS Sidebar</strong> — When printing, shows which CFS slot is currently active, its material, color, and remaining weight. Active slot is highlighted.</Li>
+    <Li><strong>Recent Jobs</strong> — Shows last 8 jobs with thumbnail previews for quick identification.</Li>
     <Li><strong>Print Queue</strong> — Shows queued prints from Moonraker if any jobs are pending.</Li></ul>
     <H3>Tips</H3>
     <ul><Li>The power graph auto-downsamples to 120 points max for smooth rendering.</Li>
     <Li>Hover over the power graph to see exact wattage at a point in time.</Li>
-    <Li>The dashboard auto-refreshes every 5 seconds during active prints.</Li></ul>
+    <Li>The dashboard auto-refreshes every 5 seconds during active prints.</Li>
+    <Li>Thumbnails are proxied from Moonraker — they are only available for files still stored on the printer. Deleted files will not show previews.</Li></ul>
   </div>
 )
 
@@ -113,13 +118,14 @@ const PrintJobsHelp = () => (
   <div className="card p-6"><H2>Print Jobs</H2>
     <P>The Print Jobs page shows a complete history of every print tracked by the system, with server-side pagination and filtering.</P>
     <H3>Key Features</H3>
-    <ul><Li><strong>Status Filter Tabs</strong> — Filter by All, Complete, Failed, Cancelled, or Printing.</Li>
+    <ul><Li><strong>Thumbnail Preview</strong> — Each job row shows a small preview image from the printer's G-code metadata or 3MF project file. Expanded rows show a larger preview. Thumbnails are only available for files still on the printer.</Li>
+    <Li><strong>Status Filter Tabs</strong> — Filter by All, Complete, Failed, Cancelled, or Printing.</Li>
     <Li><strong>Search</strong> — Search by filename.</Li>
     <Li><strong>Sortable Columns</strong> — Click column headers to sort by date, duration, filament, cost, etc.</Li>
-    <Li><strong>Expandable Rows</strong> — Click a row to expand and see per-slot CFS filament usage breakdown with color swatches and grams consumed per slot.</Li>
+    <Li><strong>Expandable Rows</strong> — Click a row to expand and see a larger thumbnail, per-slot CFS filament usage breakdown with color swatches and grams consumed per slot.</Li>
     <Li><strong>Pagination</strong> — 25 jobs per page with full server-side pagination.</Li></ul>
     <H3>Data Tracking</H3>
-    <P>Each print job records: filename, status, start/end time, duration, estimated vs actual time, filament type, filament used (from Moonraker and per-CFS-slot), power cost, and slicer metadata.</P>
+    <P>Each print job records: filename, status, start/end time, duration, estimated vs actual time, filament type, filament used (from Moonraker and per-CFS-slot), power cost, and slicer metadata. The thumbnail path is saved when the job is created so previews persist even after the file is deleted from the printer.</P>
     <H3>Cost Calculation</H3>
     <P>Power cost is calculated as <code className="text-accent-400">(kWh used) x (electricity rate)</code>. Filament cost is <code className="text-accent-400">(grams used / 1000) x (cost per kg)</code> using the slot-specific or default cost rate.</P>
   </div>
@@ -181,8 +187,23 @@ const AnalyticsHelp = () => (
     <H3>Key Features</H3>
     <ul><Li><strong>Cost Breakdown</strong> — Pie chart showing power cost vs filament cost across all prints.</Li>
     <Li><strong>Monthly Trend</strong> — Bar chart of prints, cost, and hours per month.</Li>
-    <Li><strong>Slicer Accuracy</strong> — Compares estimated vs actual print time for each job, showing variance percentage. Helps you calibrate your slicer's time estimates.</Li>
+    <Li><strong>Slicer Accuracy</strong> — Compares estimated vs actual print time for each job, showing the difference as +/- h:mm:ss (e.g. +43s, -2m 33s). Green indicates the print finished faster than estimated, red indicates it took longer. Helps you calibrate your slicer's time estimates.</Li>
     <Li><strong>CSV Export</strong> — Download all print job data as a CSV file for spreadsheet analysis.</Li></ul>
+  </div>
+)
+
+const ReportsHelp = () => (
+  <div className="card p-6"><H2>Reports</H2>
+    <P>The Reports page provides period-based summaries with charts for daily, weekly, or monthly analysis of your printing activity.</P>
+    <H3>Key Features</H3>
+    <ul><Li><strong>Period Selector</strong> — Switch between Daily, Weekly, or Monthly views. Navigate forward and backward through time periods.</Li>
+    <Li><strong>Summary Cards</strong> — Total jobs, success rate, filament used (total and by type), print hours, and total cost (power + filament).</Li>
+    <Li><strong>Jobs Over Time</strong> — Stacked bar chart showing completed, failed, and cancelled jobs per period.</Li>
+    <Li><strong>Filament & Cost</strong> — Dual bar chart showing filament consumed and cost per period.</Li>
+    <Li><strong>Print Hours & Power Cost</strong> — Trend charts for print time and electricity cost over the selected period range.</Li>
+    <Li><strong>Job Details Table</strong> — Tabular view of all jobs within the selected period with status badges.</Li></ul>
+    <H3>Data Source</H3>
+    <P>Reports use the same database as the Print Jobs page. All costs are calculated using the configured electricity rate and per-slot filament costs.</P>
   </div>
 )
 

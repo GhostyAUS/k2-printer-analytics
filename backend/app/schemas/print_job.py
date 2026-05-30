@@ -45,6 +45,7 @@ class PrintJobResponse(BaseModel):
     electricity_cost: Optional[float] = None
     filament_cost: Optional[float] = None
     spool_id: Optional[int] = None
+    thumbnail_path: Optional[str] = None
 
     class Config:
         from_attributes = True

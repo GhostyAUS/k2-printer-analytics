@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { fetchPrinterStats, fetchJobs, fetchActiveSlot, fetchPowerReading, fetchPrintSessionPower, fetchCfsSlots, fetchSettings, fetchSummary, fetchPowerHistory, fetchPrintQueue, fetchMaintenance } from '../api'
+import { fetchPrinterStats, fetchJobs, fetchActiveSlot, fetchPowerReading, fetchPrintSessionPower, fetchCfsSlots, fetchSettings, fetchSummary, fetchPowerHistory, fetchPrintQueue, fetchMaintenance, getThumbnailUrl } from '../api'
 import type { PrintJob, CfsSlot, PrinterStats } from '../types'
 
 const Dashboard: React.FC = () => {
@@ -109,20 +109,32 @@ const Dashboard: React.FC = () => {
             <span className="text-sm font-bold text-accent-400">{progress.toFixed(1)}%</span>
           </div>
           <div className="card-body">
-            {progress >= 100 ? (
-              <div className="mb-4">
-                <div className="w-full bg-surface-700 rounded-full h-2.5">
-                  <div className="bg-rose-500 h-2.5 rounded-full transition-all" style={{ width: '100%' }} />
-                </div>
-                <p className="text-xs text-rose-400 mt-1.5 font-medium">
-                  Exceeds estimation by {meta?.time_remaining_seconds ? formatDuration(Math.abs(meta.time_remaining_seconds)) : '—'}
-                </p>
+            <div className="flex gap-4 mb-4">
+              <div className="shrink-0">
+                <img
+                  src={getThumbnailUrl(ps?.filename || '')}
+                  alt="Print preview"
+                  className="w-24 h-24 object-contain rounded-lg bg-surface-800 border border-surface-700"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
               </div>
-            ) : (
-              <div className="w-full bg-surface-700 rounded-full h-2.5 mb-4">
-                <div className="bg-accent-500 h-2.5 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
+              <div className="flex-1 min-w-0">
+                {progress >= 100 ? (
+                  <div>
+                    <div className="w-full bg-surface-700 rounded-full h-2.5">
+                      <div className="bg-rose-500 h-2.5 rounded-full transition-all" style={{ width: '100%' }} />
+                    </div>
+                    <p className="text-xs text-rose-400 mt-1.5 font-medium">
+                      Exceeds estimation by {meta?.time_remaining_seconds ? formatDuration(Math.abs(meta.time_remaining_seconds)) : '—'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="w-full bg-surface-700 rounded-full h-2.5">
+                    <div className="bg-accent-500 h-2.5 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
+                  </div>
+                )}
               </div>
-            )}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
               <div>
                 <p className="text-xs text-surface-500 mb-1">Remaining</p>
@@ -347,7 +359,17 @@ const Dashboard: React.FC = () => {
                   <tbody>
                     {jobs.slice(0, 8).map(job => (
                       <tr key={job.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
-                        <td className="px-4 py-3 text-surface-300 truncate max-w-[180px]">{job.filename}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 max-w-[180px]">
+                            <img
+                              src={job.thumbnail_path || getThumbnailUrl(job.filename)}
+                              alt=""
+                              className="w-8 h-8 object-contain rounded bg-surface-800 border border-surface-700 shrink-0"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            />
+                            <span className="text-surface-300 truncate">{job.filename}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`badge-${job.status === 'COMPLETE' ? 'success' : job.status === 'PRINTING' ? 'info' : job.status === 'CANCELLED' ? 'warning' : job.status === 'FAILED' ? 'danger' : 'neutral'}`}>{job.status}</span>
                         </td>

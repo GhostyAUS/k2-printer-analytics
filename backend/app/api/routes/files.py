@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, Request, Query
+from fastapi.responses import Response, RedirectResponse
 from sqlalchemy.orm import Session
+from urllib.parse import quote
 import aiohttp
+import logging
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.app_config import AppConfig
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -78,19 +83,98 @@ async def get_file_metadata(request: Request, db: Session = Depends(get_db), fil
     }
 
 
+async def _find_thumbnail_path(session: aiohttp.ClientSession, moonraker_url: str, filename: str) -> str | None:
+    url = f"{moonraker_url}/server/files/metadata?filename={quote(filename)}"
+    async with session.get(url) as resp:
+        if resp.status == 200:
+            data = await resp.json()
+            result = data.get("result", {})
+            thumbnails = result.get("thumbnails", [])
+            if thumbnails:
+                best = max(thumbnails, key=lambda t: t.get("width", 0))
+                rel = best.get("relative_path", "")
+                if rel:
+                    return f"{moonraker_url}/server/files/{rel}"
+
+    if "/" in filename:
+        parent = filename.rsplit("/", 1)[0]
+        gcode_name = filename.rsplit("/", 1)[1]
+        png_name = gcode_name.rsplit(".", 1)[0] + ".png"
+        for prefix in ("", "."):
+            dir_path = f"{parent}/{prefix}{parent}" if "/" not in parent else f"gcodes/{prefix}{parent}"
+            test_url = f"{moonraker_url}/server/files/{quote(dir_path + '/' + png_name, safe='/')}"
+            async with session.get(test_url) as resp:
+                if resp.status == 200:
+                    return test_url
+
+    all_url = f"{moonraker_url}/server/files/list?root=gcodes"
+    async with session.get(all_url) as resp:
+        if resp.status != 200:
+            return None
+        all_files = (await resp.json()).get("result", [])
+
+    gcode_base = filename.rsplit("/", 1)[-1] if "/" in filename else filename
+    png_base = gcode_base.rsplit(".", 1)[0] + ".png"
+
+    for f in all_files:
+        fpath = f.get("path", "")
+        if fpath.endswith("/" + png_base):
+            return f"{moonraker_url}/server/files/gcodes/{quote(fpath, safe='/')}"
+
+    dirs_url = f"{moonraker_url}/server/files/directory?path=gcodes/"
+    async with session.get(dirs_url) as resp:
+        if resp.status != 200:
+            return None
+        dir_data = (await resp.json()).get("result", {})
+        dirs = dir_data.get("dirs", [])
+
+    for d in dirs:
+        dirname = d.get("dirname", "") if isinstance(d, dict) else str(d)
+        if not dirname.startswith("."):
+            continue
+        dir_path = f"gcodes/{dirname}"
+        sub_url = f"{moonraker_url}/server/files/directory?path={quote(dir_path)}"
+        async with session.get(sub_url) as resp:
+            if resp.status != 200:
+                continue
+            sub_data = (await resp.json()).get("result", {})
+            sub_files = sub_data.get("files", [])
+            has_gcode = any(sf.get("filename", "").lower() == gcode_base.lower() for sf in sub_files)
+            if not has_gcode:
+                continue
+            for sf in sub_files:
+                sfn = sf.get("filename", "")
+                if sfn == png_base:
+                    return f"{moonraker_url}/server/files/gcodes/{quote(dirname + '/' + sfn, safe='/')}"
+            for sf in sub_files:
+                sfn = sf.get("filename", "")
+                if sfn.endswith(".png") and "plate" in sfn:
+                    return f"{moonraker_url}/server/files/gcodes/{quote(dirname + '/' + sfn, safe='/')}"
+
+    return None
+
+
 @router.get("/thumbnail")
 async def get_file_thumbnail(request: Request, db: Session = Depends(get_db), filename: str = Query(...)):
-    """Get thumbnail path for a gcode file."""
+    """Get thumbnail URL for a gcode file."""
     session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
-    url = f"{moonraker_url}/server/files/metadata?filename={filename}"
-    async with session.get(url) as resp:
-        if resp.status != 200:
-            return {"thumbnail": None}
-        data = await resp.json()
-    result = data.get("result", {})
-    thumbnails = result.get("thumbnails", [])
-    if thumbnails:
-        thumb = thumbnails[-1]
-        return {"thumbnail": f"{moonraker_url}/server/files/{thumb.get('relative_path', '')}"}
+    thumb_url = await _find_thumbnail_path(session, moonraker_url, filename)
+    if thumb_url:
+        return {"thumbnail": thumb_url}
     return {"thumbnail": None}
+
+
+@router.get("/thumbnail-image")
+async def get_thumbnail_image(request: Request, db: Session = Depends(get_db), filename: str = Query(...)):
+    """Proxy thumbnail image for a gcode file. Returns PNG directly or 404."""
+    session = await _get_session(request)
+    moonraker_url = _get_moonraker_url(db)
+    thumb_url = await _find_thumbnail_path(session, moonraker_url, filename)
+    if not thumb_url:
+        return Response(status_code=404, content=b"Not found")
+    async with session.get(thumb_url) as resp:
+        if resp.status != 200:
+            return Response(status_code=404, content=b"Not found")
+        body = await resp.read()
+        return Response(content=body, media_type="image/png")

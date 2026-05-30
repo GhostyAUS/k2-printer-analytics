@@ -371,4 +371,9 @@ export function getExportLogsUrl(): string {
   return `${base}/api/v1/debug/export-logs`
 }
 
+export function getThumbnailUrl(filename: string): string {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  return `${base}/api/v1/files/thumbnail-image?filename=${encodeURIComponent(filename)}`
+}
+
 export default api

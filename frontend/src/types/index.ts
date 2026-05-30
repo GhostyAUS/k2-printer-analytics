@@ -73,6 +73,7 @@ export interface PrintJob {
   filament_cost: number | null
   filament_type: string | null
   spool_id: number | null
+  thumbnail_path: string | null
   created_at: string
   updated_at: string
 }
