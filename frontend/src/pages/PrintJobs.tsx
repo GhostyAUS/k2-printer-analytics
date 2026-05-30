@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { fetchJobsPaginated, fetchSlotUsage, getThumbnailUrl, type PaginatedJobs } from '../api'
+import ThumbnailImg from '../components/ThumbnailImg'
 
 type SlotUsage = {
   slot_id: string
@@ -221,12 +222,9 @@ const PrintJobs: React.FC = () => {
                       onClick={() => toggleExpand(job.id)}
                     >
                       <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                        <img
+                        <ThumbnailImg
                           src={job.thumbnail_path || getThumbnailUrl(job.filename)}
-                          alt=""
-                          className="w-10 h-10 object-contain rounded bg-surface-800 border border-surface-700"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                          loading="lazy"
+                          size="sm"
                         />
                       </td>
                       <td className="px-4 py-3 text-surface-200 font-medium max-w-[200px] truncate" title={job.filename}>
@@ -271,11 +269,10 @@ const PrintJobs: React.FC = () => {
                       <tr className="bg-surface-900/50">
                         <td colSpan={12} className="px-6 py-4">
                           <div className="flex gap-4 mb-4">
-                            <img
+                            <ThumbnailImg
                               src={job.thumbnail_path || getThumbnailUrl(job.filename)}
                               alt="Print preview"
-                              className="w-28 h-28 object-contain rounded-lg bg-surface-800 border border-surface-700 shrink-0"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              size="md"
                             />
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-xs flex-1">
                               <div>

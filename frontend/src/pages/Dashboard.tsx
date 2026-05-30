@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { fetchPrinterStats, fetchJobs, fetchActiveSlot, fetchPowerReading, fetchPrintSessionPower, fetchCfsSlots, fetchSettings, fetchSummary, fetchPowerHistory, fetchPrintQueue, fetchMaintenance, getThumbnailUrl } from '../api'
+import ThumbnailImg from '../components/ThumbnailImg'
 import type { PrintJob, CfsSlot, PrinterStats } from '../types'
 
 const Dashboard: React.FC = () => {
@@ -111,11 +112,10 @@ const Dashboard: React.FC = () => {
           <div className="card-body">
             <div className="flex gap-4 mb-4">
               <div className="shrink-0">
-                <img
+                <ThumbnailImg
                   src={getThumbnailUrl(ps?.filename || '')}
                   alt="Print preview"
-                  className="w-24 h-24 object-contain rounded-lg bg-surface-800 border border-surface-700"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  size="lg"
                 />
               </div>
               <div className="flex-1 min-w-0">
@@ -361,11 +361,9 @@ const Dashboard: React.FC = () => {
                       <tr key={job.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 max-w-[180px]">
-                            <img
+                            <ThumbnailImg
                               src={job.thumbnail_path || getThumbnailUrl(job.filename)}
-                              alt=""
-                              className="w-8 h-8 object-contain rounded bg-surface-800 border border-surface-700 shrink-0"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              size="xs"
                             />
                             <span className="text-surface-300 truncate">{job.filename}</span>
                           </div>
