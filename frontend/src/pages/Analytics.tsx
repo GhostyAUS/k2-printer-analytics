@@ -33,6 +33,18 @@ const formatDuration = (s: number | null | undefined): string => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
+const fmtDiff = (seconds: number | null | undefined): string => {
+  if (seconds === null || seconds === undefined) return '—'
+  const sign = seconds >= 0 ? '+' : '-'
+  const abs = Math.abs(seconds)
+  const h = Math.floor(abs / 3600)
+  const m = Math.floor((abs % 3600) / 60)
+  const s = Math.floor(abs % 60)
+  if (h > 0) return `${sign}${h}h ${m}m`
+  if (m > 0) return `${sign}${m}m ${s}s`
+  return `${sign}${s}s`
+}
+
 type SortKey = 'filename' | 'actual_duration_seconds' | 'filament_used_g' | 'electricity_cost' | 'filament_cost' | 'total_cost'
 
 const Analytics: React.FC = () => {
@@ -378,8 +390,8 @@ const Analytics: React.FC = () => {
             <h2 className="text-sm font-semibold text-white">Slicer Accuracy</h2>
             <div className="flex items-center gap-4 text-xs text-surface-400">
               <span>{slicerAccuracy.summary.count} jobs</span>
-              <span>Avg: <span className="text-surface-200">{slicerAccuracy.summary.avg_variance_pct}%</span></span>
-              <span>Median: <span className="text-surface-200">{slicerAccuracy.summary.median_variance_pct}%</span></span>
+              <span>Avg diff: <span className="text-surface-200">{fmtDiff(slicerAccuracy.summary.avg_diff_seconds)}</span></span>
+              <span>Median diff: <span className="text-surface-200">{fmtDiff(slicerAccuracy.summary.median_diff_seconds)}</span></span>
             </div>
           </div>
           <div className="card-body">
@@ -395,12 +407,38 @@ const Analytics: React.FC = () => {
               }} options={{
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => { const j = slicerAccuracy.jobs[ctx.dataIndex]; return `${j.filename.slice(0, 30)}: ${j.actual_hours}h actual / ${j.estimated_hours}h est (${j.variance_pct}%)` } } } },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => { const j = slicerAccuracy.jobs[ctx.dataIndex]; return `${j.filename.slice(0, 30)}: ${j.actual_hours}h actual / ${j.estimated_hours}h est (${j.diff_hms})` } } } },
                 scales: {
                   x: { title: { display: true, text: 'Estimated (hrs)', color: '#71717a' }, ticks: { color: '#71717a' }, grid: { color: 'rgba(113,113,122,0.1)' } },
                   y: { title: { display: true, text: 'Actual (hrs)', color: '#71717a' }, ticks: { color: '#71717a' }, grid: { color: 'rgba(113,113,122,0.1)' } },
                 },
               }} />
+            </div>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-700/50 text-xs text-surface-400">
+                    <th className="text-left px-3 py-2 font-medium">#</th>
+                    <th className="text-left px-3 py-2 font-medium">File</th>
+                    <th className="text-right px-3 py-2 font-medium">Estimated</th>
+                    <th className="text-right px-3 py-2 font-medium">Actual</th>
+                    <th className="text-right px-3 py-2 font-medium">Difference</th>
+                    <th className="text-left px-3 py-2 font-medium">Material</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slicerAccuracy.jobs.slice(0, 20).map((j: any) => (
+                    <tr key={j.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
+                      <td className="px-3 py-2 text-surface-500 font-mono text-xs">{j.id}</td>
+                      <td className="px-3 py-2 text-surface-200 max-w-[180px] truncate" title={j.filename}>{j.filename.replace(/\.gcode$/i, '')}</td>
+                      <td className="px-3 py-2 text-right text-surface-400">{formatDuration(j.estimated_seconds)}</td>
+                      <td className="px-3 py-2 text-right text-surface-400">{formatDuration(j.actual_seconds)}</td>
+                      <td className={`px-3 py-2 text-right font-mono text-xs ${(j.diff_seconds || 0) >= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{j.diff_hms}</td>
+                      <td className="px-3 py-2 text-surface-500 text-xs">{j.filament_type || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

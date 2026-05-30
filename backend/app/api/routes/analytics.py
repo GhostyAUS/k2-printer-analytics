@@ -116,11 +116,27 @@ def get_slicer_accuracy(db: Session = Depends(get_db)):
     data = []
     for j in jobs:
         pct = (j.actual_duration_seconds / j.estimated_duration_seconds) * 100
+        diff_seconds = j.actual_duration_seconds - j.estimated_duration_seconds
+        sign = "+" if diff_seconds >= 0 else "-"
+        abs_diff = abs(diff_seconds)
+        d_h = int(abs_diff // 3600)
+        d_m = int((abs_diff % 3600) // 60)
+        d_s = int(abs_diff % 60)
+        if d_h > 0:
+            diff_str = f"{sign}{d_h}h {d_m}m {d_s}s"
+        elif d_m > 0:
+            diff_str = f"{sign}{d_m}m {d_s}s"
+        else:
+            diff_str = f"{sign}{d_s}s"
         data.append({
             "id": j.id,
             "filename": j.filename,
             "estimated_hours": round(j.estimated_duration_seconds / 3600, 2),
             "actual_hours": round(j.actual_duration_seconds / 3600, 2),
+            "estimated_seconds": j.estimated_duration_seconds,
+            "actual_seconds": j.actual_duration_seconds,
+            "diff_seconds": diff_seconds,
+            "diff_hms": diff_str,
             "variance_pct": round(pct, 1),
             "filament_type": j.filament_type,
         })
@@ -128,9 +144,13 @@ def get_slicer_accuracy(db: Session = Depends(get_db)):
     if data:
         avg_variance = sum(d["variance_pct"] for d in data) / len(data)
         median_variance = sorted(d["variance_pct"] for d in data)[len(data) // 2]
+        avg_diff = sum(d["diff_seconds"] for d in data) / len(data)
+        median_diff = sorted(d["diff_seconds"] for d in data)[len(data) // 2]
     else:
         avg_variance = 0
         median_variance = 0
+        avg_diff = 0
+        median_diff = 0
 
     return {
         "jobs": data,
@@ -138,6 +158,8 @@ def get_slicer_accuracy(db: Session = Depends(get_db)):
             "count": len(data),
             "avg_variance_pct": round(avg_variance, 1),
             "median_variance_pct": round(median_variance, 1),
+            "avg_diff_seconds": round(avg_diff, 1),
+            "median_diff_seconds": round(median_diff, 1),
         }
     }
 
@@ -313,3 +335,140 @@ def get_slot_usage(job_id: int, db: Session = Depends(get_db)):
              "filament_used_g": u.filament_used_g, "measuring_wheel_start": u.measuring_wheel_start,
              "measuring_wheel_end": u.measuring_wheel_end, "started_at": u.started_at,
              "ended_at": u.ended_at} for u in usages]
+
+
+@router.get("/report")
+def get_report(period: str = Query("weekly", regex="^(daily|weekly|monthly)$"), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+
+    if period == "daily":
+        start = (now - timedelta(days=offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        label = start.strftime("%Y-%m-%d")
+    elif period == "weekly":
+        days_since_monday = start.weekday() if offset == 0 else 0
+        start = (now - timedelta(days=offset * 7 + days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        if offset == 0:
+            start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=7)
+        label = f"{start.strftime('%b %d')} – {(end - timedelta(days=1)).strftime('%b %d')}"
+    else:
+        start = (now - timedelta(days=offset * 30)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = (start.replace(day=28) + timedelta(days=4)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        label = start.strftime("%B %Y")
+
+    all_jobs = db.query(PrintJob).filter(PrintJob.start_time >= start, PrintJob.start_time < end).all()
+    completed = [j for j in all_jobs if j.status == PrintStatus.COMPLETE]
+    failed = [j for j in all_jobs if j.status == PrintStatus.FAILED]
+    cancelled = [j for j in all_jobs if j.status == PrintStatus.CANCELLED]
+    printing = [j for j in all_jobs if j.status == PrintStatus.PRINTING]
+
+    total_filament_g = sum(j.filament_used_g or 0 for j in completed)
+    total_duration_s = sum(j.actual_duration_seconds or 0 for j in completed)
+    total_power_kwh = sum(j.total_power_kwh or 0 for j in completed)
+    total_elec_cost = sum(j.electricity_cost or 0 for j in completed)
+    total_fil_cost = sum(j.filament_cost or 0 for j in completed)
+
+    filament_by_type: Dict[str, float] = {}
+    for j in completed:
+        ft = j.filament_type or "Unknown"
+        filament_by_type[ft] = filament_by_type.get(ft, 0) + (j.filament_used_g or 0)
+
+    avg_duration_s = total_duration_s / len(completed) if completed else 0
+    avg_filament_g = total_filament_g / len(completed) if completed else 0
+
+    return {
+        "period": period,
+        "label": label,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "summary": {
+            "total_jobs": len(all_jobs),
+            "completed": len(completed),
+            "failed": len(failed),
+            "cancelled": len(cancelled),
+            "printing": len(printing),
+            "success_rate": round(len(completed) / max(len(all_jobs), 1) * 100, 1),
+        },
+        "filament": {
+            "total_g": round(total_filament_g, 1),
+            "total_kg": round(total_filament_g / 1000, 2),
+            "avg_per_print_g": round(avg_filament_g, 1),
+            "by_type": {k: round(v, 1) for k, v in sorted(filament_by_type.items(), key=lambda x: -x[1])},
+            "total_cost": round(total_fil_cost, 2),
+        },
+        "power": {
+            "total_kwh": round(total_power_kwh, 3),
+            "total_cost": round(total_elec_cost, 2),
+            "avg_per_print_kwh": round(total_power_kwh / max(len(completed), 1), 3),
+        },
+        "time": {
+            "total_hours": round(total_duration_s / 3600, 1),
+            "avg_per_print_hours": round(avg_duration_s / 3600, 1),
+            "avg_per_print_minutes": round(avg_duration_s / 60, 1),
+        },
+        "cost": {
+            "total": round(total_elec_cost + total_fil_cost, 2),
+            "electricity": round(total_elec_cost, 2),
+            "filament": round(total_fil_cost, 2),
+            "avg_per_print": round((total_elec_cost + total_fil_cost) / max(len(completed), 1), 2),
+        },
+        "jobs": [{
+            "id": j.id,
+            "filename": j.filename,
+            "status": j.status.value,
+            "duration_hours": round((j.actual_duration_seconds or 0) / 3600, 2),
+            "filament_g": round(j.filament_used_g or 0, 1),
+            "filament_type": j.filament_type,
+            "total_cost": round((j.electricity_cost or 0) + (j.filament_cost or 0), 2),
+        } for j in all_jobs],
+    }
+
+
+@router.get("/report/series")
+def get_report_series(period: str = Query("weekly", regex="^(daily|weekly|monthly)$"), count: int = Query(8, ge=1, le=52), db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    results = []
+
+    for i in range(count - 1, -1, -1):
+        if period == "daily":
+            start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=1)
+            label = start.strftime("%m/%d")
+        elif period == "weekly":
+            s = now - timedelta(days=i * 7 + now.weekday())
+            start = s.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=7)
+            label = f"{start.strftime('%m/%d')}"
+        else:
+            start = (now - timedelta(days=i * 30)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end = (start.replace(day=28) + timedelta(days=4)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            label = start.strftime("%b")
+
+        jobs = db.query(PrintJob).filter(PrintJob.start_time >= start, PrintJob.start_time < end)
+        all_count = jobs.count()
+        comp = jobs.filter(PrintJob.status == PrintStatus.COMPLETE)
+        comp_count = comp.count()
+        filament_g = float(comp.with_entities(func.coalesce(func.sum(PrintJob.filament_used_g), 0)).scalar() or 0)
+        duration_s = float(comp.with_entities(func.coalesce(func.sum(PrintJob.actual_duration_seconds), 0)).scalar() or 0)
+        elec = float(comp.with_entities(func.coalesce(func.sum(PrintJob.electricity_cost), 0)).scalar() or 0)
+        fil = float(comp.with_entities(func.coalesce(func.sum(PrintJob.filament_cost), 0)).scalar() or 0)
+        failed_count = jobs.filter(PrintJob.status == PrintStatus.FAILED).count()
+        cancelled_count = jobs.filter(PrintJob.status == PrintStatus.CANCELLED).count()
+
+        results.append({
+            "label": label,
+            "start": start.isoformat(),
+            "total_jobs": all_count,
+            "completed": comp_count,
+            "failed": failed_count,
+            "cancelled": cancelled_count,
+            "filament_g": round(filament_g, 1),
+            "filament_kg": round(filament_g / 1000, 2),
+            "hours": round(duration_s / 3600, 1),
+            "cost": round(elec + fil, 2),
+            "electricity_cost": round(elec, 2),
+            "filament_cost": round(fil, 2),
+        })
+
+    return results

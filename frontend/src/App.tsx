@@ -9,6 +9,7 @@ import Analytics from './pages/Analytics.tsx'
 import SystemHealth from './pages/SystemHealth.tsx'
 import Settings from './pages/Settings.tsx'
 import Help from './pages/Help.tsx'
+import Reports from './pages/Reports.tsx'
 import FilamentLibrary from './pages/FilamentLibrary.tsx'
 import Compare from './pages/Compare.tsx'
 import Files from './pages/Files.tsx'
@@ -123,6 +124,7 @@ function App() {
             <Route path="compare" element={<Compare />} />
             <Route path="system" element={<SystemHealth />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="help" element={<Help />} />
           </Route>
         </Routes>
