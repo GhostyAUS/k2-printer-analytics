@@ -366,4 +366,9 @@ export async function runAllDebugTests(): Promise<{
   return data
 }
 
+export function getExportLogsUrl(): string {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  return `${base}/api/v1/debug/export-logs`
+}
+
 export default api

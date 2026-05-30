@@ -73,7 +73,7 @@ async def auth_middleware_func(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
     path = request.url.path
-    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status", "/api/v1/settings/setup/test-connection"]
+    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status", "/api/v1/settings/setup/test-connection", "/api/v1/debug/export-logs"]
     if path in public_paths or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/api/v1/auth/"):
         return await call_next(request)
     if path.startswith("/api/v1/"):

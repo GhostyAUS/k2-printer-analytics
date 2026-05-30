@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional
 import httpx
 import asyncio
+import subprocess
+import os
 
 from app.core.database import get_db, SessionLocal
 from app.core.config import settings
@@ -481,3 +484,110 @@ async def run_all_tests(db: Session = Depends(get_db)):
         results.append(result)
     passed = sum(1 for r in results if r.passed)
     return {"results": results, "total": len(results), "passed": passed, "failed": len(results) - passed}
+
+
+@router.get("/export-logs", response_class=PlainTextResponse)
+async def export_logs(request: Request, db: Session = Depends(get_db)):
+    token = request.query_params.get("token", "")
+    if token:
+        from app.core.auth import verify_token
+        payload = verify_token(token)
+        if not payload:
+            return PlainTextResponse("Unauthorized", status_code=401)
+    sections = []
+    sections.append("=" * 60)
+    sections.append("K2 Printer Analytics - Diagnostic Logs")
+    sections.append(f"Generated: {os.popen('date -u \"+%Y-%m-%d %H:%M:%S UTC\"').read().strip()}")
+    sections.append("=" * 60)
+
+    sections.append("\n[SYSTEM]")
+    try:
+        sections.append(f"Hostname: {os.uname().nodename}")
+        sections.append(f"Platform: {os.uname().sysname} {os.uname().release}")
+        sections.append(f"Python: {subprocess.run(['python3', '--version'], capture_output=True, text=True).stdout.strip()}")
+    except Exception as e:
+        sections.append(f"Error: {e}")
+
+    sections.append("\n[DOCKER]")
+    try:
+        r = subprocess.run(['docker', 'ps', '--format', 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'], capture_output=True, text=True, timeout=10)
+        sections.append(r.stdout.strip() or "Docker not available")
+    except Exception as e:
+        sections.append(f"Docker not available: {e}")
+
+    sections.append("\n[ENVIRONMENT]")
+    for key in ["MOONRAKER_HOST", "MOONRAKER_PORT", "MEROSS_EMAIL", "POWER_RATE_KWH", "DATABASE_URL", "TZ"]:
+        val = os.environ.get(key, "(not set)")
+        if "PASSWORD" in key or "SECRET" in key:
+            val = "***"
+        sections.append(f"  {key}={val}")
+
+    sections.append("\n[DB CONFIG]")
+    try:
+        for k in ["moonraker_host", "moonraker_port", "meross_email", "meross_device_name", "meross_device_uuid",
+                   "electricity_rate_kwh", "currency", "default_filament_cost_per_kg",
+                   "notify_webhook_url", "notify_on_complete", "notify_on_failed", "notify_on_cancelled"]:
+            row = db.query(AppConfig).filter(AppConfig.key == k).first()
+            val = row.value if row else "(not set)"
+            if "password" in k.lower():
+                val = "***"
+            sections.append(f"  {k}={val}")
+    except Exception as e:
+        sections.append(f"  Error: {e}")
+
+    sections.append("\n[DIAGNOSTIC TEST RESULTS]")
+    try:
+        for name, (cat, test_fn) in TEST_REGISTRY.items():
+            result = await test_fn(db)
+            status = "PASS" if result.passed else "FAIL"
+            sections.append(f"  [{status}] {result.name}: {result.detail} ({result.duration_ms}ms)")
+    except Exception as e:
+        sections.append(f"  Error running tests: {e}")
+
+    sections.append("\n[TRACKER STATE]")
+    try:
+        from app.services.print_tracker import print_tracker
+        sections.append(f"  running={print_tracker._running}")
+        sections.append(f"  active_job_id={print_tracker.active_job_id}")
+    except Exception as e:
+        sections.append(f"  Error: {e}")
+
+    sections.append("\n[DB STATS]")
+    try:
+        from app.models.print_job import PrintJob, PrintStatus
+        from app.models.filament_roll import FilamentRoll
+        from app.models.cfs_slot_usage import CfsSlotUsage
+        from app.models.cfs_override import CfsSlotOverride
+        sections.append(f"  print_jobs={db.query(PrintJob).count()}")
+        sections.append(f"  printing={db.query(PrintJob).filter(PrintJob.status == PrintStatus.PRINTING).count()}")
+        sections.append(f"  complete={db.query(PrintJob).filter(PrintJob.status == PrintStatus.COMPLETE).count()}")
+        sections.append(f"  failed={db.query(PrintJob).filter(PrintJob.status == PrintStatus.FAILED).count()}")
+        sections.append(f"  filament_library={db.query(FilamentRoll).count()}")
+        sections.append(f"  cfs_synced={db.query(FilamentRoll).filter(FilamentRoll.spool_id.isnot(None), FilamentRoll.spool_id != '').count()}")
+        sections.append(f"  cfs_slot_usage={db.query(CfsSlotUsage).count()}")
+        sections.append(f"  cfs_overrides={db.query(CfsSlotOverride).count()}")
+    except Exception as e:
+        sections.append(f"  Error: {e}")
+
+    sections.append("\n[RECENT JOBS]")
+    try:
+        from app.models.print_job import PrintJob
+        recent = db.query(PrintJob).order_by(PrintJob.id.desc()).limit(5).all()
+        for j in recent:
+            sections.append(f"  #{j.id}: {j.filename} status={j.status} filament={j.filament_used_g}g duration={j.duration_seconds}s")
+    except Exception as e:
+        sections.append(f"  Error: {e}")
+
+    sections.append("\n[CFS SLOT OVERRIDES]")
+    try:
+        from app.models.cfs_override import CfsSlotOverride
+        overrides = db.query(CfsSlotOverride).all()
+        for o in overrides:
+            sections.append(f"  {o.slot_id}: remaining={o.remaining_pct}% color={o.color_hex} cost={o.cost_per_kg} weight={o.spool_weight_g}g")
+    except Exception as e:
+        sections.append(f"  Error: {e}")
+
+    sections.append("\n" + "=" * 60)
+    sections.append("End of diagnostic logs")
+
+    return "\n".join(sections)
