@@ -7,6 +7,7 @@ from typing import Optional, Dict
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.app_config import AppConfig
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -40,6 +41,9 @@ class ConnectionUpdate(BaseModel):
     meross_password: Optional[str] = None
     meross_device_name: Optional[str] = None
     meross_device_uuid: Optional[str] = None
+    timezone: Optional[str] = None
+    currency: Optional[str] = None
+    electricity_rate_kwh: Optional[float] = None
 
 
 @router.get("/")
@@ -90,6 +94,9 @@ def set_connection(data: ConnectionUpdate, db: Session = Depends(get_db)):
         ("meross_password", "meross_password"),
         ("meross_device_name", "meross_device_name"),
         ("meross_device_uuid", "meross_device_uuid"),
+        ("timezone", "timezone"),
+        ("currency", "currency"),
+        ("electricity_rate_kwh", "electricity_rate_kwh"),
     ]:
         value = getattr(data, field)
         if value is not None:
@@ -131,6 +138,7 @@ def get_setup_status(db: Session = Depends(get_db)):
 
     has_moonraker = bool(moonraker_host)
     has_meross = bool(get_setting(db, "meross_email", settings.meross_email))
+    has_user = db.query(User).first() is not None
 
     import httpx
     moonraker_connected = False
@@ -146,4 +154,5 @@ def get_setup_status(db: Session = Depends(get_db)):
         "moonraker_port": int(moonraker_port),
         "moonraker_connected": moonraker_connected,
         "meross_configured": has_meross,
+        "has_user": has_user,
     }

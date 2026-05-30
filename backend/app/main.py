@@ -3,13 +3,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import aiohttp
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response, JSONResponse
 from contextlib import asynccontextmanager
 from app.core.config import settings
+from app.core.auth import get_optional_user
+from app.models.user import User
 from app.api.health import router as health_router
+from app.api.routes.auth import router as auth_router
 from app.api.routes.printer import router as printer_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.jobs import router as jobs_router
@@ -41,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 
 class DynamicCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: StarletteRequest, call_next):
         if request.method == "OPTIONS":
             origin = request.headers.get("origin", "*")
             return Response(
@@ -64,6 +67,23 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         return response
 
 
+async def auth_middleware_func(request: Request, call_next):
+    path = request.url.path
+    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status"]
+    if path in public_paths or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/api/v1/auth/"):
+        return await call_next(request)
+    if path.startswith("/api/v1/"):
+        from app.core.auth import verify_token
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            payload = verify_token(token)
+            if payload:
+                return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    return await call_next(request)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
@@ -73,9 +93,11 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(DynamicCORSMiddleware)
+    app.middleware("http")(auth_middleware_func)
     
     # Include routers
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(auth_router, prefix="/api/v1")
     app.include_router(printer_router, prefix="/api/v1")
     app.include_router(analytics_router, prefix="/api/v1")
     app.include_router(jobs_router, prefix="/api/v1")

@@ -6,6 +6,26 @@ const api = axios.create({
   timeout: 10000,
 })
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('k2_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('k2_token')
+      localStorage.removeItem('k2_user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 export async function fetchJobs(): Promise<PrintJob[]> {
   const { data } = await api.get('/api/v1/jobs/')
   return data
@@ -217,6 +237,7 @@ export async function fetchSetupStatus(): Promise<{
   moonraker_port: number
   moonraker_connected: boolean
   meross_configured: boolean
+  has_user: boolean
 }> {
   const { data } = await api.get('/api/v1/settings/setup/status')
   return data
@@ -229,9 +250,27 @@ export async function saveConnection(data: {
   meross_password?: string
   meross_device_name?: string
   meross_device_uuid?: string
+  timezone?: string
+  currency?: string
+  electricity_rate_kwh?: number
 }): Promise<any> {
   const { data: result } = await api.put('/api/v1/settings/connection', data)
   return result
+}
+
+export async function login(username: string, password: string): Promise<{ access_token: string; username: string; is_admin: boolean }> {
+  const { data } = await api.post('/api/v1/auth/login', { username, password })
+  return data
+}
+
+export async function register(username: string, password: string): Promise<{ access_token: string; username: string; is_admin: boolean }> {
+  const { data } = await api.post('/api/v1/auth/register', { username, password })
+  return data
+}
+
+export async function fetchAuthStatus(): Promise<{ initialized: boolean; authenticated: boolean; username: string | null; is_admin: boolean }> {
+  const { data } = await api.get('/api/v1/auth/status')
+  return data
 }
 
 export default api

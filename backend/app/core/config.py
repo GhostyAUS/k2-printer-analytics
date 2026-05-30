@@ -5,6 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
     app_name: str = "K2 Analytics API"
     debug: bool = False
+    secret_key: str = "change-me-in-production-use-a-long-random-string"
     database_url: str = "postgresql://k2user:k2pass@localhost:5432/k2_analytics"
     
     # Moonraker settings
