@@ -113,8 +113,15 @@ const Spools: React.FC = () => {
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">CFS Units</h1>
+        <p className="text-sm text-surface-400 mt-1">Loading...</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card"><div className="card-body h-64 animate-pulse bg-surface-800 rounded" /></div>
+        <div className="card"><div className="card-body h-64 animate-pulse bg-surface-800 rounded" /></div>
+      </div>
     </div>
   )
 
@@ -125,7 +132,7 @@ const Spools: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Spools & CFS</h1>
+          <h1 className="text-2xl font-bold text-white">CFS Units</h1>
           <p className="text-sm text-surface-400 mt-1">{slots.length} slots detected</p>
         </div>
         <div className="flex items-center gap-2">

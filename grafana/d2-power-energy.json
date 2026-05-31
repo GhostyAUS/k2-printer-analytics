@@ -1,0 +1,24 @@
+{
+  "dashboard": {
+    "title": "K2 Power & Energy",
+    "tags": ["k2", "power"],
+    "timezone": "Australia/Perth",
+    "refresh": "10s",
+    "panels": [
+      {"id": 1, "title": "Current Draw", "type": "stat", "gridPos": {"h": 4, "w": 5, "x": 0, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(wattage) AS watts FROM power_logs ORDER BY timestamp DESC LIMIT 1", "format": "table"}], "fieldConfig": {"defaults": {"unit": "W", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "orange", "value": 200}, {"color": "red", "value": 350}]}}}},
+      {"id": 2, "title": "Avg Draw (1h)", "type": "stat", "gridPos": {"h": 4, "w": 5, "x": 5, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(AVG(wattage)) AS avg_watts FROM power_logs WHERE timestamp > NOW() - INTERVAL '1 hour'", "format": "table"}], "fieldConfig": {"defaults": {"unit": "W"}}},
+      {"id": 3, "title": "Session Energy", "type": "stat", "gridPos": {"h": 4, "w": 5, "x": 10, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(SUM(wattage) / 1000.0 / 12, 3) AS kwh FROM power_logs WHERE timestamp > NOW() - INTERVAL '5 minutes'", "format": "table"}], "fieldConfig": {"defaults": {"unit": "kWh"}}},
+      {"id": 4, "title": "Total Energy", "type": "stat", "gridPos": {"h": 4, "w": 4, "x": 15, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(SUM(total_power_kwh)::numeric, 2) AS total_kwh FROM print_jobs WHERE total_power_kwh IS NOT NULL", "format": "table"}], "fieldConfig": {"defaults": {"unit": "kWh", "color": {"mode": "fixed"}, "fixedColor": "amber"}}},
+      {"id": 5, "title": "Est Cost/hr", "type": "stat", "gridPos": {"h": 4, "w": 5, "x": 19, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(AVG(electricity_cost) / NULLIF(AVG(actual_duration_seconds) / 3600, 0), 2) AS cost_per_hr FROM print_jobs WHERE status = 'COMPLETE' AND electricity_cost > 0 AND actual_duration_seconds > 0", "format": "table"}], "fieldConfig": {"defaults": {"unit": "$/h", "color": {"mode": "fixed"}, "fixedColor": "orange"}}},
+
+      {"id": 10, "title": "Power Draw", "type": "timeseries", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 4}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT timestamp AS time, wattage FROM power_logs WHERE timestamp > $__timeFrom() ORDER BY 1", "format": "time_series"}], "fieldConfig": {"defaults": {"unit": "W", "color": {"mode": "fixed"}, "fixedColor": "orange", "fill": 0.3, "custom": {"lineWidth": 1, "fillOpacity": 20}}}, "options": {"tooltip": {"mode": "multi"}}},
+
+      {"id": 20, "title": "Daily Energy Consumption", "type": "barchart", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT DATE(timestamp AT TIME ZONE 'Australia/Perth') AS time, ROUND(SUM(wattage) / 1000.0 / 12, 2) AS kwh FROM power_logs WHERE timestamp > $__timeFrom() GROUP BY 1 ORDER BY 1", "format": "time_series"}], "fieldConfig": {"defaults": {"unit": "kWh", "color": {"mode": "fixed"}, "fixedColor": "amber"}}},
+      {"id": 21, "title": "Power by Print State", "type": "piechart", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT CASE WHEN pl.wattage > 50 THEN 'Printing/Heating' WHEN pl.wattage > 10 THEN 'Idle Warm' ELSE 'Idle Cold' END AS state, ROUND(AVG(pl.wattage)) AS avg_watts FROM power_logs pl WHERE pl.timestamp > NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 2 DESC", "format": "table"}]},
+
+      {"id": 30, "title": "Electricity Cost Trend", "type": "barchart", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT DATE(start_time AT TIME ZONE 'Australia/Perth') AS time, ROUND(SUM(electricity_cost)::numeric, 2) AS electricity_cost FROM print_jobs WHERE start_time > $__timeFrom() GROUP BY 1 ORDER BY 1", "format": "time_series"}], "fieldConfig": {"defaults": {"unit": "$", "color": {"mode": "fixed"}, "fixedColor": "yellow"}}},
+      {"id": 31, "title": "Cost vs Duration", "type": "scatter", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT actual_duration_seconds / 3600.0 AS duration_h, electricity_cost AS cost, filament_type FROM print_jobs WHERE status = 'COMPLETE' AND electricity_cost > 0 AND start_time > $__timeFrom()", "format": "table"}], "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}}}
+    ]
+  },
+  "overwrite": true
+}

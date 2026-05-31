@@ -29,6 +29,10 @@
 - Sortable columns (remaining%, cost/kg, brand, material)
 - Material filter and search
 - Auto-decrement on print completion (matches by material type)
+- SpoolmanDB catalog picker (auto-opens on add)
+- Bulk add: quantity field for adding multiple identical spools at once
+- CFS slot grouping: separate sections for CFS 1 (T1A–D), CFS 2 (T2A–D), and "Spools in Stock"
+- Slot-order sorting: T1A→T1D, T2A→T2D (not by remaining %)
 
 ### Camera
 - Live stream viewer (defaults to printer IP:8000/stream)
@@ -43,9 +47,16 @@
 ### Analytics
 - Sortable/filterable cost breakdown table
 - Monthly cost trend chart
-- Slicer accuracy scatter plot (estimated vs actual)
+- Slicer accuracy scatter plot (estimated vs actual, ±h:mm:ss format)
 - CSV export of all jobs with costs
 - Summary endpoint: totals, month/week breakdowns, projected costs, low stock count
+- `per_page` capped at 100 (backend validation)
+
+### Reports
+- Daily/weekly/monthly period selector with back/forward navigation
+- Summary cards (cost, filament, print hours)
+- Stacked bar charts for filament and cost breakdown
+- Job details table per period
 
 ### Compare
 - Side-by-side comparison of any two print jobs
@@ -75,31 +86,40 @@
 - Dynamic Meross credentials with service reconnect on save
 - Dynamic CORS origin reflection (supports any host)
 - `aiohttp.ClientSession` shared on `app.state` with auto-recovery `_get_session()`
-- WebSocket endpoint at `/api/v1/ws` with MoonrakerClient
 - Print tracker: auto-creates jobs, tracks progress, decrements filament, sends notifications
+- Filament type fallback: if filename doesn't contain material, uses CFS slot data at finalization
 - Analytics service: summary, power history, monthly trend, slicer accuracy, maintenance
+- Prometheus metrics: `prometheus-fastapi-instrumentator` on `/metrics`
+- JWT auth: login, setup wizard, admin/user roles, 7-day token expiry
+- Bulk filament creation: `POST /api/v1/filament/bulk` with `{roll, quantity}`
+- Debug tests: 23 tests including filament_type null check
 
 ### Deployment
-- Docker Compose: PostgreSQL, backend (FastAPI), frontend (Vite dev server)
+- Docker Compose: PostgreSQL, backend (FastAPI), frontend (Vite dev server), Prometheus
+- PostgreSQL exposed on port 5432 for Grafana queries
+- Prometheus scrapes backend `/metrics` every 10s
+- Grafana: 7 pre-built dashboards (Print Operations, Power & Energy, Filament & CFS, Cost Analytics, Slicer Accuracy, System Health, Moonraker Live)
 - Installer scripts for Ubuntu/Debian/CentOS/Arch/openSUSE
 - GitHub repo: https://github.com/GhostyAUS/k2-printer-analytics
+
+### Frontend Performance
+- Route-based lazy loading: `React.lazy()` + `Suspense` for all 13 pages
+- Vite manual chunks: `vendor-react`, `vendor-router`, `vendor-chart`
+- Dashboard: memoized sub-components, `Promise.allSettled`, paginated job fetch (8 per page)
+- `useFetch` cache hook: request dedup + 30s TTL
+- Skeleton placeholders instead of blocking spinners
 
 ---
 
 ## Outstanding Work
 
 ### High Priority
-- [ ] **Meross dynamic credential reconnect** — service reset wired in settings.py but not fully tested end-to-end; verify reconnect works after saving new Meross credentials via UI
-- [ ] **WebSocket live updates on Dashboard** — `useMoonrakerWS.ts` hook exists but not wired into Dashboard components for real-time progress/power updates
 - [ ] **Multi-stage Docker build** — production frontend should use nginx to serve built assets instead of Vite dev server; reduces image size and improves performance
-- [ ] **Production nginx config** — frontend Dockerfile currently runs `npm run dev`; needs `npm run build` + nginx serving static assets
 
 ### Medium Priority
-- [ ] **First-run detection in App.tsx** — currently `/setup` route exists but no auto-redirect for new users; should check `/api/v1/settings/setup/status` and redirect to `/setup` if not configured
 - [ ] **AdGuard DNS setup helper** — simplified DNS rewrite instructions (user does this manually in their environment; just needs example configs)
 - [ ] **NPM SSL termination** — document setup for Let's Encrypt via NPM for external HTTPS access
 - [ ] **Error boundaries** — frontend has no error boundaries; a failed API call can crash the whole app
-- [ ] **Loading states** — many pages show empty state briefly before data loads; add skeleton loaders
 
 ### Low Priority / Nice-to-Have
 - [ ] **Camera enable instructions** — popup or tooltip explaining how to enable K2 built-in camera in printer touchscreen Settings → Camera
@@ -109,7 +129,7 @@
 - [ ] **Filament roll swap tracking** — record when a roll is swapped in CFS
 - [ ] **Multiple printer support** — currently hardcoded single Moonraker instance
 - [ ] **Backup/restore** — export/import settings and historical data
-- [ ] **User authentication** — no login system; app is open to anyone on the network
 
 ### Blocked
 - [ ] **K2 built-in camera** — Creality camera module responds on port 8000 but returns 0-byte responses; requires enabling in printer touchscreen Settings → Camera (hardware/firmware issue, not software)
+- [ ] **Meross cloud API** — currently rate-limited ("too many tokens without logging out"); power readings return None

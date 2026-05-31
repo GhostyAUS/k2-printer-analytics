@@ -1,0 +1,23 @@
+{
+  "dashboard": {
+    "title": "K2 System Health",
+    "tags": ["k2", "system"],
+    "timezone": "Australia/Perth",
+    "refresh": "10s",
+    "panels": [
+      {"id": 1, "title": "API Uptime", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "up{job=\"k2-backend\"}", "legendFormat": "Status"}], "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}},
+      {"id": 2, "title": "Avg Latency (p50)", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "histogram_quantile(0.5, rate(http_request_duration_seconds_bucket{job=\"k2-backend\"}[5m]))", "legendFormat": "p50"}], "fieldConfig": {"defaults": {"unit": "s", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.5}, {"color": "red", "value": 2}]}}}},
+      {"id": 3, "title": "Error Rate", "type": "gauge", "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "sum(rate(http_requests_total{job=\"k2-backend\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"k2-backend\"}[5m])) * 100", "legendFormat": "Error %"}], "fieldConfig": {"defaults": {"min": 0, "max": 10, "unit": "percent", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}}}},
+      {"id": 4, "title": "DB Size", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT pg_size_pretty(pg_database_size('k2_analytics')) AS size", "format": "table"}]},
+
+      {"id": 10, "title": "Request Rate by Endpoint", "type": "timeseries", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 4}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "sum(rate(http_requests_total{job=\"k2-backend\"}[5m])) by (method, path)", "legendFormat": "{{method}} {{path}}"}], "fieldConfig": {"defaults": {"unit": "req/s"}}},
+
+      {"id": 20, "title": "Response Latency p50/p95/p99", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket{job=\"k2-backend\"}[5m])) by (le))", "legendFormat": "p50"}, {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"k2-backend\"}[5m])) by (le))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"k2-backend\"}[5m])) by (le))", "legendFormat": "p99"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+      {"id": 21, "title": "Error Rate by Endpoint", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "sum(rate(http_requests_total{job=\"k2-backend\",status=~\"5..\"}[5m])) by (path)", "legendFormat": "{{path}}"}], "fieldConfig": {"defaults": {"unit": "req/s"}}},
+
+      {"id": 30, "title": "Moonraker Connection", "type": "stat", "gridPos": {"h": 4, "w": 12, "x": 0, "y": 22}, "datasource": {"uid": "efnnywuyy48w0a"}, "targets": [{"expr": "http_requests_total{job=\"k2-backend\",path=\"/api/v1/printer/stats\",code=\"200\"}", "legendFormat": "Successful polls"}], "fieldConfig": {"defaults": {"color": {"mode": "fixed"}, "fixedColor": "green"}}},
+      {"id": 31, "title": "Total Rows", "type": "stat", "gridPos": {"h": 4, "w": 12, "x": 12, "y": 22}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT (SELECT COUNT(*) FROM print_jobs) AS print_jobs, (SELECT COUNT(*) FROM power_logs) AS power_logs, (SELECT COUNT(*) FROM filament_library) AS filament_rolls", "format": "table"}]}
+    ]
+  },
+  "overwrite": true
+}

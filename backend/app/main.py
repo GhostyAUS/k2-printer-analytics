@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response, JSONResponse
 from contextlib import asynccontextmanager
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import settings
 from app.core.auth import get_optional_user
 from app.models.user import User
@@ -73,7 +74,7 @@ async def auth_middleware_func(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
     path = request.url.path
-    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status", "/api/v1/settings/setup/test-connection", "/api/v1/debug/export-logs", "/api/v1/files/thumbnail-image"]
+    public_paths = ["/", "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/status", "/api/v1/settings/setup/status", "/api/v1/settings/setup/test-connection", "/api/v1/debug/export-logs", "/api/v1/files/thumbnail-image", "/metrics"]
     if path in public_paths or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/api/v1/auth/"):
         return await call_next(request)
     if path.startswith("/api/v1/"):
@@ -116,6 +117,8 @@ def create_app() -> FastAPI:
     app.include_router(files_router, prefix="/api/v1")
     app.include_router(spoolmandb_router, prefix="/api/v1")
     app.include_router(debug_router, prefix="/api/v1")
+    
+    Instrumentator().instrument(app).expose(app)
     
     return app
 

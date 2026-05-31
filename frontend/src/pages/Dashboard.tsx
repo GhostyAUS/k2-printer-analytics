@@ -1,91 +1,235 @@
-import React, { useEffect, useState } from 'react'
-import { fetchPrinterStats, fetchJobs, fetchActiveSlot, fetchPowerReading, fetchPrintSessionPower, fetchCfsSlots, fetchSettings, fetchSummary, fetchPowerHistory, fetchPrintQueue, fetchMaintenance, getThumbnailUrl } from '../api'
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { fetchPrinterStats, fetchJobsPaginated, fetchActiveSlot, fetchPowerReading, fetchPrintSessionPower, fetchCfsSlots, fetchSummary, fetchPowerHistory, fetchPrintQueue, fetchMaintenance, getThumbnailUrl } from '../api'
 import ThumbnailImg from '../components/ThumbnailImg'
-import type { PrintJob, CfsSlot, PrinterStats } from '../types'
+import type { PrintJob, CfsSlot } from '../types'
+
+const colorFromHex = (hex: string): string => {
+  if (!hex || hex === '-1') return '#52525b'
+  let h = hex.replace('#', '')
+  if (h.length === 7 && h.startsWith('0')) h = h.substring(1)
+  if (h.length !== 6) return '#52525b'
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return '#52525b'
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+const formatDuration = (seconds: number | null | undefined): string => {
+  if (!seconds || seconds <= 0) return '—'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+const Skeleton = ({ className = '' }: { className?: string }) => (
+  <div className={`animate-pulse bg-surface-800 rounded ${className}`} />
+)
+
+const StatSkeleton = () => (
+  <div className="card"><div className="card-body">
+    <Skeleton className="h-3 w-16 mb-2" />
+    <Skeleton className="h-6 w-12" />
+  </div></div>
+)
+
+const PowerChart = React.memo(({ history }: { history: { timestamp: string; wattage: number }[] }) => {
+  const { avgW, niceMax, yTicks, xTicks } = useMemo(() => {
+    const maxW = history.length > 0 ? Math.max(...history.map(p => p.wattage), 1) : 1
+    const avgW = history.length > 0 ? history.reduce((s, p) => s + p.wattage, 0) / history.length : 0
+    const niceMax = Math.ceil(maxW / 50) * 50
+    const yTicks = [0, Math.round(niceMax / 4), Math.round(niceMax / 2), Math.round(niceMax * 3 / 4), niceMax]
+    const xTickCount = 7
+    const xTicks = Array.from({ length: xTickCount }, (_, i) => {
+      const minAgo = 60 - (i * 60 / (xTickCount - 1))
+      if (minAgo === 0) return 'Now'
+      if (minAgo < 1) return '<1m'
+      return `${Math.round(minAgo)}m`
+    })
+    return { maxW, avgW, niceMax, yTicks, xTicks }
+  }, [history])
+
+  return (
+    <div className="card">
+      <div className="card-header flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-white">Power Draw (Last Hour)</h2>
+        <span className="text-xs text-amber-400">Avg: {avgW.toFixed(0)} W</span>
+      </div>
+      <div className="card-body">
+        <div className="relative h-36">
+          <div className="absolute inset-0 flex items-end">
+            <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-[10px] text-surface-500 text-right pr-1">
+              {yTicks.slice().reverse().map((t, i) => (
+                <span key={i}>{t}W</span>
+              ))}
+            </div>
+            <div className="ml-10 flex-1 flex items-end gap-px h-full">
+              {history.map((p, i) => (
+                <div key={i} className="flex-1 bg-accent-500/60 rounded-t-sm min-w-px" style={{ height: `${(p.wattage / niceMax) * 100}%` }} title={`${p.wattage.toFixed(0)}W`} />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="ml-10 flex justify-between mt-1 text-[10px] text-surface-500">
+          {xTicks.map((label, i) => (
+            <span key={i}>{label}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+})
+
+const CfsSlotsCard = React.memo(({ slots }: { slots: CfsSlot[] }) => (
+  <div className="card">
+    <div className="card-header flex items-center justify-between">
+      <h2 className="text-sm font-semibold text-white">CFS Slots</h2>
+      {slots.some(s => s.is_active) && (
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-sky-900/30 border border-sky-500/20 rounded">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[10px] text-sky-300 font-medium">
+            {slots.find(s => s.is_active)?.slot} {slots.find(s => s.is_active)?.feed_state}
+          </span>
+        </div>
+      )}
+    </div>
+    <div className="card-body p-3">
+      <div className="grid grid-cols-2 gap-2">
+        {slots.slice(0, 8).map(slot => (
+          <div key={slot.slot} className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
+            slot.is_active
+              ? 'bg-sky-900/30 ring-1 ring-sky-500/40'
+              : 'bg-surface-800/30'
+          }`}>
+            <div className={`w-4 h-4 rounded-full border shrink-0 ${
+              slot.is_active ? 'border-sky-400 animate-pulse' : 'border-surface-600'
+            }`} style={{ backgroundColor: colorFromHex(slot.color_hex) }} />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-surface-200">{slot.slot}</p>
+              <p className="text-[10px] text-surface-500 truncate">{slot.material_name}</p>
+            </div>
+            <div className="ml-auto text-right">
+              <span className={`text-[10px] ${slot.remaining_pct <= 20 ? 'text-amber-400' : slot.is_active ? 'text-sky-300 font-medium' : 'text-surface-500'}`}>{slot.remaining_pct}%</span>
+              {slot.remaining_weight_g != null && <p className="text-[9px] text-surface-600">{slot.remaining_weight_g}g</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+))
+
+const RecentJobsTable = React.memo(({ jobs }: { jobs: PrintJob[] }) => (
+  <div className="card">
+    <div className="card-header"><h2 className="text-sm font-semibold text-white">Recent Jobs</h2></div>
+    <div className="card-body p-0">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b border-surface-700/50 text-xs text-surface-500"><th className="text-left px-4 py-3 font-medium">File</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Duration</th><th className="text-right px-4 py-3 font-medium">Cost</th></tr></thead>
+          <tbody>
+            {jobs.map(job => (
+              <tr key={job.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <ThumbnailImg
+                      src={job.thumbnail_path || getThumbnailUrl(job.filename)}
+                      size="sm"
+                    />
+                    <span className="text-surface-300 truncate max-w-[300px]" title={job.filename}>{job.filename}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`badge-${job.status === 'COMPLETE' ? 'success' : job.status === 'PRINTING' ? 'info' : job.status === 'CANCELLED' ? 'warning' : job.status === 'FAILED' ? 'danger' : 'neutral'}`}>{job.status}</span>
+                </td>
+                <td className="px-4 py-3 text-surface-400">{job.actual_duration_seconds ? `${Math.round(job.actual_duration_seconds / 60)} min` : '—'}</td>
+                <td className="px-4 py-3 text-right text-surface-300 font-medium">{(job.filament_cost || job.electricity_cost) ? `$${((job.filament_cost || 0) + (job.electricity_cost || 0)).toFixed(2)}` : '—'}</td>
+              </tr>
+            ))}
+            {jobs.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-surface-500 text-xs">Loading jobs...</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+))
 
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<PrinterStats | null>(null)
-  const [jobs, setJobs] = useState<PrintJob[]>([])
   const [activeSlot, setActiveSlot] = useState<CfsSlot | null>(null)
   const [power, setPower] = useState<number | null>(null)
   const [sessionPower, setSessionPower] = useState<{ total_kwh: number } | null>(null)
   const [cfsSlots, setCfsSlots] = useState<CfsSlot[]>([])
-  const [_elecRate, _setElecRate] = useState(0.49)
   const [summary, setSummary] = useState<any>(null)
   const [powerHistory, setPowerHistory] = useState<{ timestamp: string; wattage: number }[]>([])
   const [queue, setQueue] = useState<any[]>([])
   const [maintenance, setMaintenance] = useState<any>(null)
+  const [jobs, setJobs] = useState<PrintJob[]>([])
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [ps, setPs] = useState<any>(null)
+  const [meta, setMeta] = useState<any>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [statsData, jobsData, slotData, powerData, sessionData, cfsData, settingsData] = await Promise.all([
-          fetchPrinterStats(),
-          fetchJobs(),
-          fetchActiveSlot(),
-          fetchPowerReading(),
-          fetchPrintSessionPower(),
-          fetchCfsSlots(),
-          fetchSettings().catch(() => ({} as Record<string, string>)),
-        ])
-        setStats(statsData)
-        setJobs(jobsData)
-        setActiveSlot(slotData.active_slot)
-        setPower(powerData.power_watts)
-        setSessionPower(sessionData)
-        setCfsSlots(cfsData.slots)
-        if (settingsData.electricity_rate_kwh) _setElecRate(parseFloat(settingsData.electricity_rate_kwh))
-
-        fetchSummary().then(setSummary).catch(() => {})
-        fetchPowerHistory(60).then(setPowerHistory).catch(() => {})
-        fetchPrintQueue().then(d => setQueue(d.queue || [])).catch(() => {})
-        fetchMaintenance().then(setMaintenance).catch(() => {})
-      } catch (e) {
-        console.error('Dashboard load error:', e)
-      }
+  const loadLive = useCallback(async () => {
+    const results = await Promise.allSettled([
+      fetchPrinterStats(),
+      fetchActiveSlot(),
+      fetchPowerReading(),
+      fetchPrintSessionPower(),
+      fetchCfsSlots(),
+    ])
+    if (results[0].status === 'fulfilled') {
+      const statsData = results[0].value
+      const p = statsData?.result?.status?.print_stats
+      const m = statsData?.result?.meta
+      const printing = p?.state === 'printing'
+      setPs(p); setMeta(m); setIsPrinting(printing)
+      setProgress(printing ? (m?.progress ?? 0) * 100 : 0)
     }
-    load()
-    const interval = setInterval(load, 10000)
-    return () => clearInterval(interval)
+    if (results[1].status === 'fulfilled') setActiveSlot(results[1].value.active_slot)
+    if (results[2].status === 'fulfilled') setPower(results[2].value.power_watts)
+    if (results[3].status === 'fulfilled') setSessionPower(results[3].value)
+    if (results[4].status === 'fulfilled') setCfsSlots(results[4].value.slots)
   }, [])
 
-  const ps = stats?.result?.status?.print_stats
-  const meta = stats?.result?.meta
-  const isPrinting = ps?.state === 'printing'
-  const progress = isPrinting ? (meta?.progress ?? 0) * 100 : 0
+  const loadBackground = useCallback(async () => {
+    const results = await Promise.allSettled([
+      fetchJobsPaginated({ page: 1, per_page: 8, sort_by: 'start_time', sort_order: 'desc' }),
+      fetchSummary(),
+      fetchPowerHistory(60),
+      fetchPrintQueue(),
+      fetchMaintenance(),
+    ])
+    if (results[0].status === 'fulfilled') setJobs(results[0].value.items)
+    if (results[1].status === 'fulfilled') setSummary(results[1].value)
+    if (results[2].status === 'fulfilled') setPowerHistory(results[2].value)
+    if (results[3].status === 'fulfilled') setQueue(results[3].value.queue || [])
+    if (results[4].status === 'fulfilled') setMaintenance(results[4].value)
+  }, [])
 
-  const formatDuration = (seconds: number | null | undefined): string => {
-    if (!seconds || seconds <= 0) return '—'
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-    if (h > 0) return `${h}h ${m}m`
-    return `${m}m`
-  }
+  useEffect(() => {
+    let cancelled = false
+    const init = async () => {
+      await Promise.all([loadLive(), loadBackground()])
+      if (cancelled) return
+      intervalRef.current = setInterval(async () => {
+        await loadLive()
+        loadBackground()
+      }, 10000)
+    }
+    init()
+    return () => {
+      cancelled = true
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [])
 
-  const colorFromHex = (hex: string): string => {
-    if (!hex || hex === '-1') return '#52525b'
-    let h = hex.replace('#', '')
-    if (h.length === 7 && h.startsWith('0')) h = h.substring(1)
-    if (h.length !== 6) return '#52525b'
-    const r = parseInt(h.substring(0, 2), 16)
-    const g = parseInt(h.substring(2, 4), 16)
-    const b = parseInt(h.substring(4, 6), 16)
-    if (isNaN(r) || isNaN(g) || isNaN(b)) return '#52525b'
-    return `rgb(${r}, ${g}, ${b})`
-  }
-
-  const maxW = powerHistory.length > 0 ? Math.max(...powerHistory.map(p => p.wattage), 1) : 1
-  const avgW = powerHistory.length > 0 ? powerHistory.reduce((s, p) => s + p.wattage, 0) / powerHistory.length : 0
-  const niceMax = Math.ceil(maxW / 50) * 50
-  const yTicks = [0, Math.round(niceMax / 4), Math.round(niceMax / 2), Math.round(niceMax * 3 / 4), niceMax]
-
-  const xTickCount = 7
-  const xTicks = Array.from({ length: xTickCount }, (_, i) => {
-    const minAgo = 60 - (i * 60 / (xTickCount - 1))
-    if (minAgo === 0) return 'Now'
-    if (minAgo < 1) return '<1m'
-    return `${Math.round(minAgo)}m`
-  })
+  const markDone = useCallback(async (key: string) => {
+    await fetch(`/api/v1/analytics/maintenance/${key}/done`, { method: 'POST' })
+    fetchMaintenance().then(setMaintenance)
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -183,63 +327,45 @@ const Dashboard: React.FC = () => {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Total Prints</span>
-          <p className="stat-value">{summary?.total_prints ?? '—'}</p>
-        </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Total Cost</span>
-          <p className="stat-value text-amber-400">${summary?.total_cost?.toFixed(2) ?? '—'}</p>
-        </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Filament Used</span>
-          <p className="stat-value text-emerald-400">{summary?.total_filament_kg ?? '—'} kg</p>
-        </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Print Hours</span>
-          <p className="stat-value text-sky-400">{summary?.total_print_hours ?? '—'}h</p>
-        </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">This Month</span>
-          <p className="stat-value text-violet-400">{summary?.month?.prints ?? '—'} prints · ${summary?.month?.cost ?? '—'}</p>
-          {summary?.month?.projected_monthly_cost > 0 && <p className="text-[10px] text-surface-500 mt-0.5">Projected: ${summary.month.projected_monthly_cost}/mo</p>}
-        </div></div>
-        <div className="card"><div className="card-body">
-          <span className="stat-label">Success Rate</span>
-          <p className="stat-value">{summary?.success_rate ?? '—'}%</p>
-        </div></div>
+        {summary ? (<>
+          <div className="card"><div className="card-body">
+            <span className="stat-label">Total Prints</span>
+            <p className="stat-value">{summary.total_prints ?? '—'}</p>
+          </div></div>
+          <div className="card"><div className="card-body">
+            <span className="stat-label">Total Cost</span>
+            <p className="stat-value text-amber-400">${summary.total_cost?.toFixed(2) ?? '—'}</p>
+          </div></div>
+          <div className="card"><div className="card-body">
+            <span className="stat-label">Filament Used</span>
+            <p className="stat-value text-emerald-400">{summary.total_filament_kg ?? '—'} kg</p>
+          </div></div>
+          <div className="card"><div className="card-body">
+            <span className="stat-label">Print Hours</span>
+            <p className="stat-value text-sky-400">{summary.total_print_hours ?? '—'}h</p>
+          </div></div>
+          <div className="card"><div className="card-body">
+            <span className="stat-label">This Month</span>
+            <p className="stat-value text-violet-400">{summary.month?.prints ?? '—'} prints · ${summary.month?.cost ?? '—'}</p>
+            {summary.month?.projected_monthly_cost > 0 && <p className="text-[10px] text-surface-500 mt-0.5">Projected: ${summary.month.projected_monthly_cost}/mo</p>}
+          </div></div>
+          <div className="card"><div className="card-body">
+            <span className="stat-label">Success Rate</span>
+            <p className="stat-value">{summary.success_rate ?? '—'}%</p>
+          </div></div>
+        </>) : (<>
+          <StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton />
+        </>)}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {powerHistory.length > 0 && (
-            <div className="card">
-              <div className="card-header flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-white">Power Draw (Last Hour)</h2>
-                <span className="text-xs text-amber-400">Avg: {avgW.toFixed(0)} W</span>
-              </div>
-              <div className="card-body">
-                <div className="relative h-36">
-                  <div className="absolute inset-0 flex items-end">
-                    <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-[10px] text-surface-500 text-right pr-1">
-                      {yTicks.slice().reverse().map((t, i) => (
-                        <span key={i}>{t}W</span>
-                      ))}
-                    </div>
-                    <div className="ml-10 flex-1 flex items-end gap-px h-full">
-                      {powerHistory.map((p, i) => (
-                        <div key={i} className="flex-1 bg-accent-500/60 rounded-t-sm min-w-px" style={{ height: `${(p.wattage / niceMax) * 100}%` }} title={`${p.wattage.toFixed(0)}W`} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="ml-10 flex justify-between mt-1 text-[10px] text-surface-500">
-                  {xTicks.map((label, i) => (
-                    <span key={i}>{label}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
+          {powerHistory.length > 0 ? (
+            <PowerChart history={powerHistory} />
+          ) : (
+            <div className="card"><div className="card-body h-52 flex items-center justify-center">
+              <Skeleton className="h-full w-full" />
+            </div></div>
           )}
 
           {maintenance && maintenance.items?.length > 0 && (
@@ -268,10 +394,7 @@ const Dashboard: React.FC = () => {
                               style={{ width: `${Math.min(100, ((item.interval_hours - item.hours_until_due) / item.interval_hours) * 100)}%` }} />
                           </div>
                         </div>
-                        <button onClick={async () => {
-                          await fetch(`/api/v1/analytics/maintenance/${item.key}/done`, { method: 'POST' })
-                          fetchMaintenance().then(setMaintenance)
-                        }} className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Done</button>
+                        <button onClick={() => markDone(item.key)} className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Done</button>
                       </div>
                     </div>
                   ))}
@@ -313,75 +436,15 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          <div className="card">
-            <div className="card-header flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">CFS Slots</h2>
-              {cfsSlots.some(s => s.is_active) && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-sky-900/30 border border-sky-500/20 rounded">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] text-sky-300 font-medium">
-                    {cfsSlots.find(s => s.is_active)?.slot} {cfsSlots.find(s => s.is_active)?.feed_state}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="card-body p-3">
-              <div className="grid grid-cols-2 gap-2">
-                {cfsSlots.slice(0, 8).map(slot => (
-                  <div key={slot.slot} className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-                    slot.is_active
-                      ? 'bg-sky-900/30 ring-1 ring-sky-500/40'
-                      : 'bg-surface-800/30'
-                  }`}>
-                    <div className={`w-4 h-4 rounded-full border shrink-0 ${
-                      slot.is_active ? 'border-sky-400 animate-pulse' : 'border-surface-600'
-                    }`} style={{ backgroundColor: colorFromHex(slot.color_hex) }} />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-surface-200">{slot.slot}</p>
-                      <p className="text-[10px] text-surface-500 truncate">{slot.material_name}</p>
-                    </div>
-                    <div className="ml-auto text-right">
-                      <span className={`text-[10px] ${slot.remaining_pct <= 20 ? 'text-amber-400' : slot.is_active ? 'text-sky-300 font-medium' : 'text-surface-500'}`}>{slot.remaining_pct}%</span>
-                      {slot.remaining_weight_g != null && <p className="text-[9px] text-surface-600">{slot.remaining_weight_g}g</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {cfsSlots.length > 0 ? (
+            <CfsSlotsCard slots={cfsSlots} />
+          ) : (
+            <div className="card"><div className="card-body h-48"><Skeleton className="h-full w-full" /></div></div>
+          )}
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header"><h2 className="text-sm font-semibold text-white">Recent Jobs</h2></div>
-        <div className="card-body p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-surface-700/50 text-xs text-surface-500"><th className="text-left px-4 py-3 font-medium">File</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Duration</th><th className="text-right px-4 py-3 font-medium">Cost</th></tr></thead>
-              <tbody>
-                {jobs.slice(0, 8).map(job => (
-                  <tr key={job.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <ThumbnailImg
-                          src={job.thumbnail_path || getThumbnailUrl(job.filename)}
-                          size="sm"
-                        />
-                        <span className="text-surface-300 truncate max-w-[300px]" title={job.filename}>{job.filename}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`badge-${job.status === 'COMPLETE' ? 'success' : job.status === 'PRINTING' ? 'info' : job.status === 'CANCELLED' ? 'warning' : job.status === 'FAILED' ? 'danger' : 'neutral'}`}>{job.status}</span>
-                    </td>
-                    <td className="px-4 py-3 text-surface-400">{job.actual_duration_seconds ? `${Math.round(job.actual_duration_seconds / 60)} min` : '—'}</td>
-                    <td className="px-4 py-3 text-right text-surface-300 font-medium">{(job.filament_cost || job.electricity_cost) ? `$${((job.filament_cost || 0) + (job.electricity_cost || 0)).toFixed(2)}` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <RecentJobsTable jobs={jobs} />
     </div>
   )
 }

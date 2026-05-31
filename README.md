@@ -62,14 +62,18 @@ sudo ./install/master.sh --skip-prerequisites --moonraker-host 10.0.0.50
 
 - **Dashboard** — Live print progress, power usage, CFS slot status, maintenance tracking
 - **Print Jobs** — Paginated history with sorting, filtering, and cost breakdowns
-- **Analytics** — Monthly cost trends, slicer accuracy, CSV export
-- **Filament Library** — Track inventory, cost/kg, remaining weight
-- **Spools & CFS** — Live Colour Fabric Station data from Moonraker
-- **Files** — Browse gcode files on the printer with metadata previews
+- **Analytics** — Monthly cost trends, slicer accuracy (±h:mm:ss), CSV export
+- **Filament Library** — Track inventory, cost/kg, remaining weight; SpoolmanDB picker; bulk add; CFS slot grouping (T1A–D, T2A–D)
+- **CFS Units** — Live Colour Fabric Station data from Moonraker
+- **Files** — Browse gcode files on the printer with metadata previews and thumbnails
 - **Compare** — Side-by-side comparison of any two print jobs
 - **Camera** — Live stream viewer (requires camera module enabled on printer)
+- **Reports** — Daily/weekly/monthly reports with cost, filament, and print hour breakdowns
 - **System** — Moonraker system info, power readings, Meross smart plug control
 - **Settings** — Configure Moonraker connection, Meross credentials, power rates, notifications
+- **Auth** — JWT login with setup wizard, admin/user roles
+- **Grafana Dashboards** — 7 pre-built dashboards (Print Operations, Power & Energy, Filament & CFS, Cost Analytics, Slicer Accuracy, System Health, Moonraker Live)
+- **Prometheus Metrics** — Backend `/metrics` endpoint for request rate, latency, and error tracking
 
 ## Manual Setup (Without Installer)
 
@@ -82,9 +86,10 @@ Then visit `http://localhost:3000/setup` for the first-run wizard.
 
 ## Architecture
 
-- **Backend**: FastAPI (Python) with PostgreSQL, async Moonraker websocket, Meross power monitoring
-- **Frontend**: React + Vite + TypeScript with TailwindCSS
-- **Deployment**: Docker Compose with shared aiohttp session
+- **Backend**: FastAPI (Python) with PostgreSQL, async Moonraker polling, Meross power monitoring, Prometheus metrics
+- **Frontend**: React + Vite + TypeScript with TailwindCSS, route-based lazy loading
+- **Monitoring**: Grafana dashboards, Prometheus scraping, 7 pre-built analytics dashboards
+- **Deployment**: Docker Compose with PostgreSQL, backend, frontend, Prometheus
 
 ## License
 

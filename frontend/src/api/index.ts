@@ -139,6 +139,11 @@ export async function createFilamentRoll(roll: Partial<FilamentRoll>): Promise<F
   return data
 }
 
+export async function createFilamentRolls(roll: Partial<FilamentRoll>, quantity: number): Promise<FilamentRoll[]> {
+  const { data } = await api.post('/api/v1/filament/bulk', { roll, quantity })
+  return data
+}
+
 export async function updateFilamentRoll(id: number, roll: Partial<FilamentRoll>): Promise<FilamentRoll> {
   const { data } = await api.put(`/api/v1/filament/${id}`, roll)
   return data

@@ -400,6 +400,7 @@ class MoonrakerPrintTracker:
 
         db: Session = SessionLocal()
         try:
+            from app.models.filament_roll import FilamentRoll
             service = PrintJobService(db)
             state = print_stats.get("state", "complete")
             status_map = {
@@ -424,6 +425,19 @@ class MoonrakerPrintTracker:
                 "filament_length_mm": filament_mm,
                 "filament_used_g": filament_g,
             }
+
+            job_obj = service.get_print_job_by_id(job_id)
+            if job_obj and not job_obj.filament_type:
+                cfs_material = None
+                if self._active_cfs_slot:
+                    cfs_roll = db.query(FilamentRoll).filter(FilamentRoll.spool_id == self._active_cfs_slot).first()
+                    if cfs_roll:
+                        cfs_material = cfs_roll.material
+                if not cfs_material and self._cfs_material_name:
+                    cfs_material = self._cfs_material_name
+                if cfs_material:
+                    update["filament_type"] = cfs_material
+                    material = cfs_material.upper()
             result = service.update_print_job(job_id, update)
             if result:
                 logger.info(f"Finalized print job {job_id}: {state}")
@@ -488,15 +502,15 @@ class MoonrakerPrintTracker:
                             await self._finalize_active_job()
                         await self._on_print_start(stats, vsd)
                     elif self.active_job_id:
-                        db: Session = SessionLocal()
+                        db2 = SessionLocal()
                         try:
-                            service = PrintJobService(db)
-                            service.update_print_job(self.active_job_id, {
+                            service2 = PrintJobService(db2)
+                            service2.update_print_job(self.active_job_id, {
                                 "filament_length_mm": stats.get("filament_used"),
                                 "actual_duration_seconds": int(stats.get("print_duration", 0)),
                             })
                         finally:
-                            db.close()
+                            db2.close()
                 elif state in ("complete", "error", "cancelled") and self.active_job_id:
                     await self._on_print_end(stats)
 

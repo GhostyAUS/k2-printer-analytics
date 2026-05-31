@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { fetchFilamentRolls, createFilamentRoll, updateFilamentRoll, deleteFilamentRoll, weighFilamentRoll, searchSpoolmanDBFilaments, fetchSpoolmanDBBrands, fetchSpoolmanDBMaterialNames } from '../api'
+import React, { useEffect, useState, useMemo } from 'react'
+import { fetchFilamentRolls, createFilamentRolls, updateFilamentRoll, deleteFilamentRoll, weighFilamentRoll, searchSpoolmanDBFilaments, fetchSpoolmanDBBrands, fetchSpoolmanDBMaterialNames } from '../api'
 import type { FilamentRoll } from '../types'
 import type { SpoolmanDBFilament } from '../api'
 
@@ -48,7 +48,7 @@ const FilamentLibrary: React.FC = () => {
     fetchFilamentRolls().then(setRolls).catch(console.error).finally(() => setLoading(false))
   }, [])
 
-  const filtered = rolls
+  const filtered = useMemo(() => rolls
     .filter(r => {
       if (materialFilter !== 'all' && r.material !== materialFilter) return false
       if (search) {
@@ -60,7 +60,7 @@ const FilamentLibrary: React.FC = () => {
       }
       return true
     })
-    .sort((a, b) => pctRemaining(b) - pctRemaining(a))
+    .sort((a, b) => pctRemaining(b) - pctRemaining(a)), [rolls, materialFilter, search])
 
   const totalKg = rolls.reduce((s, r) => s + r.total_weight_g, 0) / 1000
   const remainingKg = rolls.reduce((s, r) => s + r.remaining_weight_g, 0) / 1000
@@ -74,6 +74,11 @@ const FilamentLibrary: React.FC = () => {
       <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
+
+  const slotOrder = (id: string) => { const m = id?.match(/^T(\d)([A-D])$/); return m ? parseInt(m[1]) * 4 + (m[2].charCodeAt(0) - 65) : 99 }
+  const cfs1 = filtered.filter(r => r.spool_id && r.spool_id.startsWith('T1')).sort((a, b) => slotOrder(a.spool_id!) - slotOrder(b.spool_id!))
+  const cfs2 = filtered.filter(r => r.spool_id && r.spool_id.startsWith('T2')).sort((a, b) => slotOrder(a.spool_id!) - slotOrder(b.spool_id!))
+  const nonCfs = filtered.filter(r => !r.spool_id || (!r.spool_id.startsWith('T1') && !r.spool_id.startsWith('T2')))
 
   return (
     <div className="space-y-6">
@@ -131,7 +136,7 @@ const FilamentLibrary: React.FC = () => {
           <button onClick={() => setView('grid')}
             className={`p-1.5 rounded-md transition-colors ${view === 'grid' ? 'bg-surface-700 text-white' : 'text-surface-500 hover:text-surface-300'}`}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-18v-2.25z" />
             </svg>
           </button>
           <button onClick={() => setView('table')}
@@ -158,13 +163,14 @@ const FilamentLibrary: React.FC = () => {
       {(adding || editing) && (
         <SpoolForm
           roll={editing}
-          onSave={async (data) => {
+          onSave={async (data, quantity) => {
             if (editing) {
               const updated = await updateFilamentRoll(editing.id, data)
               setRolls(prev => prev.map(r => r.id === editing.id ? updated : r))
             } else {
-              const roll = await createFilamentRoll(data)
-              setRolls(prev => [roll, ...prev])
+              const { quantity: _, ...rollData } = data as any
+              const rolls = await createFilamentRolls(rollData, quantity || 1)
+              setRolls(prev => [...rolls, ...prev])
             }
             setAdding(false); setEditing(null)
           }}
@@ -177,72 +183,64 @@ const FilamentLibrary: React.FC = () => {
         />
       )}
 
-      {view === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map(roll => (
-            <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false); setWeighing(null) }} onWeigh={() => { setWeighing(roll); setEditing(null); setAdding(false) }} />
-          ))}
-          {filtered.length === 0 && (
-            <div className="col-span-full text-center py-12 text-surface-500">
-              <svg className="w-12 h-12 mx-auto mb-3 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375" />
-              </svg>
-              No spools found
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="card">
-          <div className="card-body p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-surface-700/50 text-xs text-surface-400 uppercase tracking-wider">
-                    <th className="text-left px-4 py-3 font-medium">Spool</th>
-                    <th className="text-left px-4 py-3 font-medium">Material</th>
-                    <th className="text-right px-4 py-3 font-medium">Remaining</th>
-                    <th className="text-right px-4 py-3 font-medium">Cost/kg</th>
-                    <th className="text-left px-4 py-3 font-medium">Location</th>
-                    <th className="text-right px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(roll => (
-                    <tr key={roll.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors cursor-pointer" onClick={() => { setEditing(roll); setAdding(false) }}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 rounded-full border border-surface-600 shrink-0" style={{ backgroundColor: roll.color_hex || '#666' }} />
-                          <span className="text-surface-200">{roll.brand || 'Unknown'} — {roll.color_name || '—'}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: (MATERIAL_COLORS[roll.material] || '#6b7280') + '20', color: MATERIAL_COLORS[roll.material] || '#6b7280' }}>
-                          {roll.material}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-surface-200">{(roll.remaining_weight_g / 1000).toFixed(2)} kg</span>
-                        <span className="text-surface-500 text-xs ml-1">({pctRemaining(roll)}%)</span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-surface-300">{roll.cost_per_kg ? `$${roll.cost_per_kg.toFixed(2)}` : '—'}</td>
-                      <td className="px-4 py-3 text-surface-400">{roll.location || '—'}{roll.spool_id ? ` / ${roll.spool_id}` : ''}</td>
-                      <td className="px-4 py-3 text-right flex gap-1 justify-end">
-                        <button onClick={e => { e.stopPropagation(); setWeighing(roll) }} className="px-2 py-1 text-xs bg-sky-900/40 hover:bg-sky-800/60 text-sky-300 rounded transition-colors">Weigh</button>
-                        <button className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Edit</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {cfs1.length > 0 && (
+        <SectionHeader label="CFS 1" subtitle="T1A – T1D · Slots 1–4" count={cfs1.length} />
+      )}
+      {cfs1.length > 0 && (
+        view === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {cfs1.map(roll => (
+              <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false); setWeighing(null) }} onWeigh={() => { setWeighing(roll); setEditing(null); setAdding(false) }} />
+            ))}
           </div>
-        </div>
+        ) : (
+          <SpoolTable rolls={cfs1} onEdit={roll => { setEditing(roll); setAdding(false) }} onWeigh={roll => { setWeighing(roll); setEditing(null); setAdding(false) }} />
+        )
+      )}
+
+      {cfs2.length > 0 && (
+        <SectionHeader label="CFS 2" subtitle="T2A – T2D · Slots 5–8" count={cfs2.length} />
+      )}
+      {cfs2.length > 0 && (
+        view === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {cfs2.map(roll => (
+              <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false); setWeighing(null) }} onWeigh={() => { setWeighing(roll); setEditing(null); setAdding(false) }} />
+            ))}
+          </div>
+        ) : (
+          <SpoolTable rolls={cfs2} onEdit={roll => { setEditing(roll); setAdding(false) }} onWeigh={roll => { setWeighing(roll); setEditing(null); setAdding(false) }} />
+        )
+      )}
+
+      {nonCfs.length > 0 && (
+        <SectionHeader label="Spools in Stock" subtitle="Not in a CFS unit" count={nonCfs.length} />
+      )}
+      {nonCfs.length > 0 ? (
+        view === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {nonCfs.map(roll => (
+              <SpoolCard key={roll.id} roll={roll} onEdit={() => { setEditing(roll); setAdding(false); setWeighing(null) }} onWeigh={() => { setWeighing(roll); setEditing(null); setAdding(false) }} />
+            ))}
+          </div>
+        ) : (
+          <SpoolTable rolls={nonCfs} onEdit={roll => { setEditing(roll); setAdding(false) }} onWeigh={roll => { setWeighing(roll); setEditing(null); setAdding(false) }} />
+        )
+      ) : (
+        nonCfs.length === 0 && cfs1.length === 0 && cfs2.length === 0 && (
+          <div className="text-center py-12 text-surface-500">
+            <svg className="w-12 h-12 mx-auto mb-3 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375" />
+            </svg>
+            No spools found
+          </div>
+        )
       )}
     </div>
   )
 }
 
-const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void; onWeigh: () => void }> = ({ roll, onEdit, onWeigh }) => {
+const SpoolCard = React.memo<{ roll: FilamentRoll; onEdit: () => void; onWeigh: () => void }>(({ roll, onEdit, onWeigh }) => {
   const pct = pctRemaining(roll)
   const matColor = MATERIAL_COLORS[roll.material] || '#6b7280'
 
@@ -309,7 +307,7 @@ const SpoolCard: React.FC<{ roll: FilamentRoll; onEdit: () => void; onWeigh: () 
       </div>
     </div>
   )
-}
+})
 
 const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = ({ onSelect }) => {
   const [filaments, setFilaments] = useState<SpoolmanDBFilament[]>([])
@@ -481,7 +479,7 @@ const WeighDialog: React.FC<{
 
 const SpoolForm: React.FC<{
   roll: FilamentRoll | null
-  onSave: (data: Partial<FilamentRoll>) => Promise<void>
+  onSave: (data: Partial<FilamentRoll>, quantity?: number) => Promise<void>
   onCancel: () => void
   onDelete?: () => Promise<void>
 }> = ({ roll, onSave, onCancel, onDelete }) => {
@@ -497,9 +495,10 @@ const SpoolForm: React.FC<{
     location: roll?.location || '',
     notes: roll?.notes || '',
     spool_id: roll?.spool_id || '',
+    quantity: 1,
   })
   const [saving, setSaving] = useState(false)
-  const [showPicker, setShowPicker] = useState(false)
+  const [showPicker, setShowPicker] = useState(!roll)
 
   const applyFilament = (f: SpoolmanDBFilament) => {
     const hex = f.color_hex
@@ -555,14 +554,17 @@ const SpoolForm: React.FC<{
           <Input label="Cost/kg ($)" type="number" value={String(form.cost_per_kg)} onChange={v => setForm(p => ({ ...p, cost_per_kg: Number(v) }))} />
           <Input label="Location" value={form.location} onChange={v => setForm(p => ({ ...p, location: v }))} />
           <Input label="CFS Slot (e.g. T2D)" value={form.spool_id} onChange={v => setForm(p => ({ ...p, spool_id: v }))} />
+          {!roll && (
+            <Input label="Quantity" type="number" value={String(form.quantity)} onChange={v => setForm(p => ({ ...p, quantity: Math.max(1, parseInt(v) || 1) }))} />
+          )}
         </div>
         <div className="mt-3">
           <Input label="Notes" value={form.notes || ''} onChange={v => setForm(p => ({ ...p, notes: v }))} />
         </div>
         <div className="flex gap-2 mt-4">
-          <button onClick={async () => { setSaving(true); await onSave(form); }} disabled={saving}
+          <button onClick={async () => { setSaving(true); await onSave(form, roll ? undefined : form.quantity); }} disabled={saving}
             className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : (roll ? 'Save' : (form.quantity > 1 ? `Add ${form.quantity} Spools` : 'Add Spool'))}
           </button>
           <button onClick={onCancel} className="px-4 py-2 bg-surface-700 hover:bg-surface-600 text-surface-300 text-sm rounded-lg transition-colors">Cancel</button>
           {onDelete && (
@@ -579,6 +581,69 @@ const Input: React.FC<{ label: string; value: string; onChange: (v: string) => v
     <label className="text-xs text-surface-500 block mb-1">{label}</label>
     <input type={type} value={value} onChange={e => onChange(e.target.value)}
       className="w-full bg-surface-800 border border-surface-700 rounded-lg px-2 py-1.5 text-sm text-surface-200 focus:outline-none focus:border-accent-500" />
+  </div>
+)
+
+const SectionHeader: React.FC<{ label: string; subtitle: string; count: number }> = ({ label, subtitle, count }) => (
+  <div className="flex items-center gap-3 pt-2">
+    <div className="flex items-center gap-2">
+      <h2 className="text-sm font-semibold text-white">{label}</h2>
+      <span className="text-[10px] text-surface-500">{subtitle}</span>
+    </div>
+    <div className="flex-1 h-px bg-surface-700/50" />
+    <span className="text-[10px] text-surface-500 bg-surface-800 px-2 py-0.5 rounded-full">{count}</span>
+  </div>
+)
+
+const SpoolTable: React.FC<{
+  rolls: FilamentRoll[]
+  onEdit: (roll: FilamentRoll) => void
+  onWeigh: (roll: FilamentRoll) => void
+}> = ({ rolls, onEdit, onWeigh }) => (
+  <div className="card">
+    <div className="card-body p-0">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-surface-700/50 text-xs text-surface-400 uppercase tracking-wider">
+              <th className="text-left px-4 py-3 font-medium">Spool</th>
+              <th className="text-left px-4 py-3 font-medium">Material</th>
+              <th className="text-right px-4 py-3 font-medium">Remaining</th>
+              <th className="text-right px-4 py-3 font-medium">Cost/kg</th>
+              <th className="text-left px-4 py-3 font-medium">Location</th>
+              <th className="text-right px-4 py-3 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rolls.map(roll => (
+              <tr key={roll.id} className="border-b border-surface-700/20 hover:bg-surface-800/30 transition-colors cursor-pointer" onClick={() => onEdit(roll)}>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full border border-surface-600 shrink-0" style={{ backgroundColor: roll.color_hex || '#666' }} />
+                    <span className="text-surface-200">{roll.brand || 'Unknown'} — {roll.color_name || '—'}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: (MATERIAL_COLORS[roll.material] || '#6b7280') + '20', color: MATERIAL_COLORS[roll.material] || '#6b7280' }}>
+                    {roll.material}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span className="text-surface-200">{(roll.remaining_weight_g / 1000).toFixed(2)} kg</span>
+                  <span className="text-surface-500 text-xs ml-1">({pctRemaining(roll)}%)</span>
+                </td>
+                <td className="px-4 py-3 text-right text-surface-300">{roll.cost_per_kg ? `$${roll.cost_per_kg.toFixed(2)}` : '—'}</td>
+                <td className="px-4 py-3 text-surface-400">{roll.location || '—'}{roll.spool_id ? ` / ${roll.spool_id}` : ''}</td>
+                <td className="px-4 py-3 text-right flex gap-1 justify-end">
+                  <button onClick={e => { e.stopPropagation(); onWeigh(roll) }} className="px-2 py-1 text-xs bg-sky-900/40 hover:bg-sky-800/60 text-sky-300 rounded transition-colors">Weigh</button>
+                  <button className="px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-surface-300 rounded transition-colors">Edit</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 )
 

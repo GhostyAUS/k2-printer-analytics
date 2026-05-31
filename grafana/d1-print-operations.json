@@ -1,0 +1,49 @@
+{
+  "dashboard": {
+    "title": "K2 Print Operations",
+    "tags": ["k2", "prints"],
+    "timezone": "Australia/Perth",
+    "refresh": "30s",
+    "templating": {
+      "list": [
+        {
+          "name": "status",
+          "type": "query",
+          "datasource": {"uid": "bfnnywsrlcdfkf"},
+          "query": "SELECT DISTINCT status FROM print_jobs ORDER BY status",
+          "includeAll": true,
+          "allValue": ".*",
+          "multi": true,
+          "current": {"text": "All", "value": "$__all"}
+        },
+        {
+          "name": "material",
+          "type": "query",
+          "datasource": {"uid": "bfnnywsrlcdfkf"},
+          "query": "SELECT DISTINCT COALESCE(filament_type, 'Unknown') FROM print_jobs ORDER BY 1",
+          "includeAll": true,
+          "allValue": ".*",
+          "multi": true,
+          "current": {"text": "All", "value": "$__all"}
+        }
+      ]
+    },
+    "panels": [
+      {"id": 1, "title": "Total Prints", "type": "stat", "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT COUNT(*) FROM print_jobs WHERE start_time > $__timeFrom()", "format": "table"}], "fieldConfig": {"defaults": {"color": {"mode": "fixed"}, "fixedColor": "blue"}}},
+      {"id": 2, "title": "Success Rate", "type": "gauge", "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(COUNT(*) FILTER (WHERE status = 'COMPLETE')::numeric / NULLIF(COUNT(*), 0) * 100, 1) FROM print_jobs WHERE start_time > $__timeFrom()", "format": "table"}], "fieldConfig": {"defaults": {"min": 0, "max": 100, "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "orange", "value": 60}, {"color": "green", "value": 80}]}, "unit": "percent"}}},
+      {"id": 3, "title": "Avg Duration", "type": "stat", "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(AVG(actual_duration_seconds) / 3600, 1) as hours FROM print_jobs WHERE status = 'COMPLETE' AND start_time > $__timeFrom()", "format": "table"}], "fieldConfig": {"defaults": {"unit": "h"}}},
+      {"id": 4, "title": "Active Prints", "type": "stat", "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT COUNT(*) FROM print_jobs WHERE status = 'PRINTING'", "format": "table"}], "fieldConfig": {"defaults": {"color": {"mode": "fixed"}, "fixedColor": "green"}}},
+      {"id": 5, "title": "Queue Depth", "type": "stat", "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT COUNT(*) FROM print_jobs WHERE status = 'PRINTING'", "format": "table"}]},
+      {"id": 6, "title": "Prints Today", "type": "stat", "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT COUNT(*) FROM print_jobs WHERE start_time >= CURRENT_DATE", "format": "table"}], "fieldConfig": {"defaults": {"color": {"mode": "fixed"}, "fixedColor": "purple"}}},
+
+      {"id": 10, "title": "Prints by Status", "type": "piechart", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT status AS metric, COUNT(*) AS value FROM print_jobs WHERE start_time > $__timeFrom() GROUP BY status ORDER BY value DESC", "format": "table"}], "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}}},
+      {"id": 11, "title": "Prints per Day", "type": "barchart", "gridPos": {"h": 8, "w": 16, "x": 8, "y": 4}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT DATE(start_time AT TIME ZONE 'Australia/Perth') AS time, status, COUNT(*) AS count FROM print_jobs WHERE start_time > ($__timeFrom() - INTERVAL '1 day') GROUP BY 1, 2 ORDER BY 1", "format": "table"}], "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}}, "options": {"stacking": {"mode": "normal"}}},
+
+      {"id": 20, "title": "Print Duration Distribution", "type": "barchart", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT CASE WHEN actual_duration_seconds < 3600 THEN '<1h' WHEN actual_duration_seconds < 7200 THEN '1-2h' WHEN actual_duration_seconds < 14400 THEN '2-4h' ELSE '4h+' END AS bucket, COUNT(*) AS count FROM print_jobs WHERE status = 'COMPLETE' AND start_time > $__timeFrom() GROUP BY 1 ORDER BY 1", "format": "table"}]},
+      {"id": 21, "title": "Avg Duration Trend", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT DATE(start_time AT TIME ZONE 'Australia/Perth') AS time, ROUND(AVG(actual_duration_seconds) / 3600, 2) AS avg_hours FROM print_jobs WHERE status = 'COMPLETE' AND start_time > $__timeFrom() GROUP BY 1 ORDER BY 1", "format": "time_series"}], "fieldConfig": {"defaults": {"unit": "h", "color": {"mode": "fixed"}, "fixedColor": "blue"}}},
+
+      {"id": 30, "title": "Recent Print Jobs", "type": "table", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 20}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT filename, status, ROUND(actual_duration_seconds / 60.0) AS duration_min, ROUND(filament_used_g) AS filament_g, ROUND((COALESCE(electricity_cost, 0) + COALESCE(filament_cost, 0))::numeric, 2) AS total_cost, start_time AT TIME ZONE 'Australia/Perth' AS started FROM print_jobs ORDER BY start_time DESC LIMIT 25", "format": "table"}], "fieldConfig": {"defaults": {"custom": {"align": "auto"}}, "overrides": [{"matcher": {"id": "byName", "options": "status"}, "properties": [{"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}}]}, {"matcher": {"id": "byName", "options": "duration_min"}, "properties": [{"id": "unit", "value": "min"}]}]}}
+    ]
+  },
+  "overwrite": true
+}

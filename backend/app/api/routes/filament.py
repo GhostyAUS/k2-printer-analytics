@@ -25,6 +25,11 @@ class FilamentRollCreate(BaseModel):
     spool_id: Optional[str] = None
 
 
+class BulkCreateRequest(BaseModel):
+    roll: FilamentRollCreate
+    quantity: int = 1
+
+
 class FilamentRollUpdate(BaseModel):
     brand: Optional[str] = None
     material: Optional[str] = None
@@ -70,20 +75,34 @@ def list_rolls(db: Session = Depends(get_db)):
     return db.query(FilamentRoll).order_by(FilamentRoll.id.desc()).all()
 
 
-@router.get("/{roll_id}", response_model=FilamentRollResponse)
-def get_roll(roll_id: int, db: Session = Depends(get_db)):
-    roll = db.query(FilamentRoll).filter(FilamentRoll.id == roll_id).first()
-    if not roll:
-        raise HTTPException(status_code=404, detail="Filament roll not found")
-    return roll
-
-
 @router.post("/", response_model=FilamentRollResponse)
 def create_roll(data: FilamentRollCreate, db: Session = Depends(get_db)):
     roll = FilamentRoll(**data.model_dump())
     db.add(roll)
     db.commit()
     db.refresh(roll)
+    return roll
+
+
+@router.post("/bulk", response_model=List[FilamentRollResponse])
+def create_bulk(data: BulkCreateRequest, db: Session = Depends(get_db)):
+    qty = max(1, min(data.quantity, 100))
+    rolls = []
+    for _ in range(qty):
+        roll = FilamentRoll(**data.roll.model_dump())
+        db.add(roll)
+        rolls.append(roll)
+    db.commit()
+    for r in rolls:
+        db.refresh(r)
+    return rolls
+
+
+@router.get("/{roll_id}", response_model=FilamentRollResponse)
+def get_roll(roll_id: int, db: Session = Depends(get_db)):
+    roll = db.query(FilamentRoll).filter(FilamentRoll.id == roll_id).first()
+    if not roll:
+        raise HTTPException(status_code=404, detail="Filament roll not found")
     return roll
 
 

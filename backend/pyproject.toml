@@ -15,6 +15,7 @@ dependencies = [
     "meross-iot>=0.4.7.0",
     "python-multipart>=0.0.6",
     "PyJWT>=2.8.0",
+    "prometheus-fastapi-instrumentator>=6.1.0",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,12 @@
+apiVersion: 1
+providers:
+  - name: K2 Analytics
+    orgId: 1
+    folder: K2 Analytics
+    folderUid: k2-analytics
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards/k2
+      foldersFromFilesStructure: false

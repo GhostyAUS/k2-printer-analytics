@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 
 interface ThumbnailImgProps {
   src: string
@@ -14,7 +14,7 @@ const sizeClasses: Record<string, string> = {
   lg: 'w-24 h-24',
 }
 
-const ThumbnailImg: React.FC<ThumbnailImgProps> = ({ src, alt = '', size = 'sm', className = '' }) => {
+const ThumbnailImg = memo(({ src, alt = '', size = 'sm', className = '' }: ThumbnailImgProps) => {
   const [broken, setBroken] = useState(false)
   const [zoomed, setZoomed] = useState(false)
 
@@ -56,6 +56,6 @@ const ThumbnailImg: React.FC<ThumbnailImgProps> = ({ src, alt = '', size = 'sm',
       )}
     </>
   )
-}
+})
 
 export default ThumbnailImg

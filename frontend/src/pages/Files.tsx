@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { fetchPrinterFiles, fetchFileMetadata } from '../api'
 
 interface PrinterFile {
@@ -46,7 +46,7 @@ const Files: React.FC = () => {
     else { setSortBy(key); setSortAsc(false) }
   }
 
-  const filtered = files
+  const filtered = useMemo(() => files
     .filter(f => f.filename.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       let cmp = 0
@@ -54,10 +54,19 @@ const Files: React.FC = () => {
       else if (sortBy === 'size') cmp = a.size - b.size
       else cmp = (a.modified || 0) - (b.modified || 0)
       return sortAsc ? cmp : -cmp
-    })
+    }), [files, search, sortBy, sortAsc])
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" /></div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Files on Printer</h1>
+        <p className="text-sm text-surface-400 mt-1">Loading file list...</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 card"><div className="card-body h-64 animate-pulse bg-surface-800 rounded" /></div>
+        <div className="card"><div className="card-body h-64 animate-pulse bg-surface-800 rounded" /></div>
+      </div>
+    </div>
   )
 
   return (

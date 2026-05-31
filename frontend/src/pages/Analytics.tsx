@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,7 +13,7 @@ import {
   Filler,
 } from 'chart.js'
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2'
-import { fetchJobs, fetchSummary, fetchSlicerAccuracy, fetchMonthlyTrend, getExportCsvUrl } from '../api'
+import { fetchJobsPaginated, fetchSummary, fetchSlicerAccuracy, fetchMonthlyTrend, getExportCsvUrl } from '../api'
 import type { PrintJob } from '../types'
 
 ChartJS.register(
@@ -54,63 +54,68 @@ const Analytics: React.FC = () => {
   const [sortAsc, setSortAsc] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [materialFilter, setMaterialFilter] = useState<string>('all')
-  const [_summary, setSummary] = useState<any>(null)
+  const [_summaryData, setSummaryData] = useState<any>(null)
   const [slicerAccuracy, setSlicerAccuracy] = useState<{ jobs: any[]; summary: any } | null>(null)
   const [monthlyTrend, setMonthlyTrend] = useState<any[]>([])
 
   useEffect(() => {
-    fetchJobs()
-      .then(setJobs)
+    fetchJobsPaginated({ page: 1, per_page: 100, sort_by: 'start_time', sort_order: 'desc' })
+      .then(d => setJobs(d.items))
       .catch(console.error)
       .finally(() => setLoading(false))
-    fetchSummary().then(setSummary).catch(() => {})
+    fetchSummary().then(setSummaryData).catch(() => {})
     fetchSlicerAccuracy().then(setSlicerAccuracy).catch(() => {})
     fetchMonthlyTrend(6).then(setMonthlyTrend).catch(() => {})
   }, [])
 
-  const completed = jobs.filter(j => j.status === 'COMPLETE')
-  const cancelled = jobs.filter(j => j.status === 'CANCELLED')
-  const failed = jobs.filter(j => j.status === 'FAILED')
+  const completed = useMemo(() => jobs.filter(j => j.status === 'COMPLETE'), [jobs])
+  const cancelled = useMemo(() => jobs.filter(j => j.status === 'CANCELLED'), [jobs])
+  const failed = useMemo(() => jobs.filter(j => j.status === 'FAILED'), [jobs])
 
-  const totalElectricity = completed.reduce((s, j) => s + (j.electricity_cost || 0), 0)
-  const totalFilamentCost = completed.reduce((s, j) => s + (j.filament_cost || 0), 0)
-  const totalCost = totalElectricity + totalFilamentCost
-  const totalFilamentG = completed.reduce((s, j) => s + (j.filament_used_g || 0), 0)
-  const avgCost = completed.length > 0 ? totalCost / completed.length : 0
-  const totalPrintHours = completed.reduce((s, j) => s + ((j.actual_duration_seconds || 0) / 3600), 0)
-  const successRate = jobs.length > 0 ? ((completed.length / jobs.length) * 100).toFixed(1) : '—'
+  const { totalCost, totalFilamentG, totalPrintHours, avgCost, successRate } = useMemo(() => {
+    const totalElectricity = completed.reduce((s, j) => s + (j.electricity_cost || 0), 0)
+    const totalFilamentCost = completed.reduce((s, j) => s + (j.filament_cost || 0), 0)
+    const totalCost = totalElectricity + totalFilamentCost
+    const totalFilamentG = completed.reduce((s, j) => s + (j.filament_used_g || 0), 0)
+    const avgCost = completed.length > 0 ? totalCost / completed.length : 0
+    const totalPrintHours = completed.reduce((s, j) => s + ((j.actual_duration_seconds || 0) / 3600), 0)
+    const successRate = jobs.length > 0 ? ((completed.length / jobs.length) * 100).toFixed(1) : '—'
+    return { totalCost, totalFilamentG, totalPrintHours, avgCost, successRate }
+  }, [jobs, completed])
 
-  const materials = [...new Set(jobs.map(j => j.filament_type || 'Unknown'))].sort()
+  const materials = useMemo(() => [...new Set(jobs.map(j => j.filament_type || 'Unknown'))].sort(), [jobs])
 
-  const filtered = jobs.filter(j => {
+  const filtered = useMemo(() => jobs.filter(j => {
     if (statusFilter === 'complete' && j.status !== 'COMPLETE') return false
     if (statusFilter === 'cancelled' && j.status !== 'CANCELLED') return false
     if (statusFilter === 'failed' && j.status !== 'FAILED') return false
     if (materialFilter !== 'all' && (j.filament_type || 'Unknown') !== materialFilter) return false
     return true
-  })
+  }), [jobs, statusFilter, materialFilter])
 
-  const sorted = [...filtered].sort((a, b) => {
-    const getVal = (j: PrintJob): number => {
-      switch (sortKey) {
-        case 'filename': return 0
-        case 'actual_duration_seconds': return j.actual_duration_seconds || 0
-        case 'filament_used_g': return j.filament_used_g || 0
-        case 'electricity_cost': return j.electricity_cost || 0
-        case 'filament_cost': return j.filament_cost || 0
-        case 'total_cost': return (j.electricity_cost || 0) + (j.filament_cost || 0)
+  const sorted = useMemo(() => {
+    const arr = [...filtered].sort((a, b) => {
+      const getVal = (j: PrintJob): number => {
+        switch (sortKey) {
+          case 'filename': return 0
+          case 'actual_duration_seconds': return j.actual_duration_seconds || 0
+          case 'filament_used_g': return j.filament_used_g || 0
+          case 'electricity_cost': return j.electricity_cost || 0
+          case 'filament_cost': return j.filament_cost || 0
+          case 'total_cost': return (j.electricity_cost || 0) + (j.filament_cost || 0)
+        }
       }
-    }
-    const diff = getVal(a) - getVal(b)
-    return sortAsc ? diff : -diff
-  })
-
-  if (sortKey === 'filename') {
-    sorted.sort((a, b) => {
-      const cmp = a.filename.localeCompare(b.filename)
-      return sortAsc ? cmp : -cmp
+      const diff = getVal(a) - getVal(b)
+      return sortAsc ? diff : -diff
     })
-  }
+    if (sortKey === 'filename') {
+      arr.sort((a, b) => {
+        const cmp = a.filename.localeCompare(b.filename)
+        return sortAsc ? cmp : -cmp
+      })
+    }
+    return arr
+  }, [filtered, sortKey, sortAsc])
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -126,45 +131,64 @@ const Analytics: React.FC = () => {
     return sortAsc ? '↑' : '↓'
   }
 
-  const dailyMap = new Map<string, { cost: number; filament: number; hours: number; count: number }>()
-  const now = new Date()
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    const key = d.toISOString().slice(0, 10)
-    dailyMap.set(key, { cost: 0, filament: 0, hours: 0, count: 0 })
-  }
-  completed.forEach(j => {
-    if (j.end_time) {
-      const key = new Date(j.end_time).toISOString().slice(0, 10)
-      if (dailyMap.has(key)) {
-        const e = dailyMap.get(key)!
-        e.cost += (j.electricity_cost || 0) + (j.filament_cost || 0)
-        e.filament += j.filament_used_g || 0
-        e.hours += (j.actual_duration_seconds || 0) / 3600
-        e.count += 1
-      }
+  const { dailyLabels, dailyCostData, materialLabels, materialData, durationLabels, actualDurationData, estimatedDurationData } = useMemo(() => {
+    const dailyMap = new Map<string, { cost: number; filament: number; hours: number; count: number }>()
+    const now = new Date()
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      dailyMap.set(key, { cost: 0, filament: 0, hours: 0, count: 0 })
     }
-  })
-  const dailyLabels = [...dailyMap.keys()]
-  const dailyCostData = dailyLabels.map(d => dailyMap.get(d)!.cost)
+    completed.forEach(j => {
+      if (j.end_time) {
+        const key = new Date(j.end_time).toISOString().slice(0, 10)
+        if (dailyMap.has(key)) {
+          const e = dailyMap.get(key)!
+          e.cost += (j.electricity_cost || 0) + (j.filament_cost || 0)
+          e.filament += j.filament_used_g || 0
+          e.hours += (j.actual_duration_seconds || 0) / 3600
+          e.count += 1
+        }
+      }
+    })
+    const dailyLabels = [...dailyMap.keys()]
+    const dailyCostData = dailyLabels.map(d => dailyMap.get(d)!.cost)
 
-  const materialMap = new Map<string, number>()
-  completed.forEach(j => {
-    const mat = j.filament_type || 'Unknown'
-    materialMap.set(mat, (materialMap.get(mat) || 0) + (j.filament_used_g || 0))
-  })
-  const materialLabels = [...materialMap.keys()]
-  const materialData = materialLabels.map(m => Number(materialMap.get(m)!.toFixed(1)))
+    const materialMap = new Map<string, number>()
+    completed.forEach(j => {
+      const mat = j.filament_type || 'Unknown'
+      materialMap.set(mat, (materialMap.get(mat) || 0) + (j.filament_used_g || 0))
+    })
+    const materialLabels = [...materialMap.keys()]
+    const materialData = materialLabels.map(m => Number(materialMap.get(m)!.toFixed(1)))
 
-  const recentJobs = [...completed].sort((a, b) => new Date(b.end_time || 0).getTime() - new Date(a.end_time || 0).getTime()).slice(0, 20)
-  const durationLabels = recentJobs.map(j => j.filename.length > 15 ? j.filename.slice(0, 15) + '…' : j.filename.replace(/\.gcode$/i, ''))
-  const actualDurationData = recentJobs.map(j => (j.actual_duration_seconds || 0) / 3600)
-  const estimatedDurationData = recentJobs.map(j => (j.estimated_duration_seconds || 0) / 3600)
+    const recentJobs = [...completed].sort((a, b) => new Date(b.end_time || 0).getTime() - new Date(a.end_time || 0).getTime()).slice(0, 20)
+    const durationLabels = recentJobs.map(j => j.filename.length > 15 ? j.filename.slice(0, 15) + '…' : j.filename.replace(/\.gcode$/i, ''))
+    const actualDurationData = recentJobs.map(j => (j.actual_duration_seconds || 0) / 3600)
+    const estimatedDurationData = recentJobs.map(j => (j.estimated_duration_seconds || 0) / 3600)
+
+    return { dailyLabels, dailyCostData, materialLabels, materialData, durationLabels, actualDurationData, estimatedDurationData }
+  }, [completed])
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Analytics</h1>
+        <p className="text-sm text-surface-400 mt-1">Loading analytics data...</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="card"><div className="card-body">
+            <div className="animate-pulse bg-surface-800 rounded h-3 w-16 mb-2" />
+            <div className="animate-pulse bg-surface-800 rounded h-6 w-12" />
+          </div></div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card"><div className="card-body h-64 animate-pulse bg-surface-800 rounded" /></div>
+        <div className="card"><div className="card-body h-64 animate-pulse bg-surface-800 rounded" /></div>
+      </div>
     </div>
   )
 

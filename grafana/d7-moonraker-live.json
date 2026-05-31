@@ -1,0 +1,21 @@
+{
+  "dashboard": {
+    "title": "K2 Moonraker Live",
+    "tags": ["k2", "moonraker", "live"],
+    "timezone": "Australia/Perth",
+    "refresh": "5s",
+    "panels": [
+      {"id": 1, "title": "Print State", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}, "datasource": {"uid": "afnnz53xb277kd"}, "targets": [{"queryType": "json", "url": "http://192.168.1.146:7125/printer/objects/query?print_stats", "parser": "backend", "rootPath": "result.status.print_stats.state", "columns": [{"path": "result.status.print_stats.state", "text": "State"}]}]},
+      {"id": 2, "title": "Hotend Temp", "type": "gauge", "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT COALESCE((SELECT ROUND(wattage) FROM power_logs ORDER BY timestamp DESC LIMIT 1), 0) AS temp_placeholder", "format": "table"}], "fieldConfig": {"defaults": {"min": 0, "max": 300, "unit": "°C", "thresholds": {"steps": [{"color": "blue", "value": null}, {"color": "green", "value": 180}, {"color": "red", "value": 250}]}}}},
+      {"id": 3, "title": "Chamber Temp", "type": "gauge", "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT 0 AS placeholder", "format": "table"}], "fieldConfig": {"defaults": {"min": 0, "max": 80, "unit": "°C", "thresholds": {"steps": [{"color": "blue", "value": null}, {"color": "green", "value": 30}, {"color": "orange", "value": 50}, {"color": "red", "value": 70}]}}}},
+      {"id": 4, "title": "MCU Temp", "type": "gauge", "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT 0 AS placeholder", "format": "table"}], "fieldConfig": {"defaults": {"min": 0, "max": 100, "unit": "°C", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "orange", "value": 60}, {"color": "red", "value": 80}]}}}},
+
+      {"id": 10, "title": "Power Draw (Live)", "type": "timeseries", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 4}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT timestamp AS time, wattage FROM power_logs WHERE timestamp > NOW() - INTERVAL '1 hour' ORDER BY 1", "format": "time_series"}], "fieldConfig": {"defaults": {"unit": "W", "color": {"mode": "fixed"}, "fixedColor": "orange"}}},
+
+      {"id": 20, "title": "Current Filename", "type": "stat", "gridPos": {"h": 4, "w": 8, "x": 0, "y": 14}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT filename FROM print_jobs WHERE status = 'PRINTING' LIMIT 1", "format": "table"}]},
+      {"id": 21, "title": "Active CFS Slot", "type": "stat", "gridPos": {"h": 4, "w": 8, "x": 8, "y": 14}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT slot_id FROM cfs_slot_usage WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1", "format": "table"}]},
+      {"id": 22, "title": "Power (W)", "type": "stat", "gridPos": {"h": 4, "w": 8, "x": 16, "y": 14}, "datasource": {"uid": "bfnnywsrlcdfkf"}, "targets": [{"rawSql": "SELECT ROUND(wattage) FROM power_logs ORDER BY timestamp DESC LIMIT 1", "format": "table"}], "fieldConfig": {"defaults": {"unit": "W"}}}
+    ]
+  },
+  "overwrite": true
+}

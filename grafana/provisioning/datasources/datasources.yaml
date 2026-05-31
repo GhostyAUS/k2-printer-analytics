@@ -1,0 +1,30 @@
+apiVersion: 1
+datasources:
+  - name: K2 PostgreSQL
+    type: postgres
+    url: 192.168.1.203:5432
+    database: k2_analytics
+    user: k2user
+    secureJsonData:
+      password: k2pass
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+    access: proxy
+    isDefault: true
+    uid: k2-pg
+  - name: K2 Prometheus
+    type: prometheus
+    url: http://192.168.1.203:9090
+    access: proxy
+    uid: k2-prom
+    jsonData:
+      httpMethod: POST
+      timeInterval: 10s
+  - name: K2 Moonraker
+    type: yesoreyeram-infinity-datasource
+    url: http://192.168.1.146:7125
+    access: proxy
+    uid: k2-moonraker

@@ -5,6 +5,8 @@ services:
       - POSTGRES_DB=k2_analytics
       - POSTGRES_USER=k2user
       - POSTGRES_PASSWORD=k2pass
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -63,8 +65,20 @@ services:
       timeout: 10s
       retries: 3
 
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - k2-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  prometheus_data:
 
 networks:
   k2-network:

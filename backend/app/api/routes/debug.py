@@ -433,6 +433,23 @@ async def _test_api_proxy(db: Session) -> TestResult:
         return TestResult(name="api_proxy", passed=False, detail=str(e)[:100], duration_ms=elapsed)
 
 
+async def _test_filament_type(db: Session) -> TestResult:
+    import time
+    start = time.time()
+    try:
+        from app.models.print_job import PrintJob
+        null_type = db.query(PrintJob).filter(
+            (PrintJob.filament_type == None) | (PrintJob.filament_type == "")
+        ).count()
+        elapsed = int((time.time() - start) * 1000)
+        if null_type == 0:
+            return TestResult(name="filament_type", passed=True, detail="All jobs have filament_type set", duration_ms=elapsed)
+        return TestResult(name="filament_type", passed=False, detail=f"{null_type} jobs with null/empty filament_type", duration_ms=elapsed)
+    except Exception as e:
+        elapsed = int((time.time() - start) * 1000)
+        return TestResult(name="filament_type", passed=False, detail=str(e)[:100], duration_ms=elapsed)
+
+
 TEST_REGISTRY = {
     "moonraker_reachable": ("Connectivity", _test_moonraker_reachable),
     "moonraker_print_stats": ("Connectivity", _test_moonraker_print_stats),
@@ -454,6 +471,7 @@ TEST_REGISTRY = {
     "tracker_running": ("Tracker", _test_tracker_running),
     "active_job": ("Tracker", _test_active_job),
     "filament_total": ("Tracker", _test_filament_total),
+    "filament_type": ("Data & Logic", _test_filament_type),
     "frontend_served": ("Frontend", _test_frontend),
     "api_proxy": ("Frontend", _test_api_proxy),
 }
