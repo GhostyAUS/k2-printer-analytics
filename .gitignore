@@ -47,4 +47,4 @@ install/config.env
 data/
 
 # Self-signed certificates
-certs/
+certs/docs/session-log-*.md
