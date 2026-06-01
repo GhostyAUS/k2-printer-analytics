@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float
+from sqlalchemy import Column, String, Float, Boolean, Integer
 from .base import BaseModel
 
 
@@ -11,6 +11,11 @@ class CfsSlotOverride(BaseModel):
     remaining_pct = Column(Float, nullable=True)
     cost_per_kg = Column(Float, nullable=True)
     spool_weight_g = Column(Float, nullable=True)
+    calibrated = Column(Boolean, nullable=True, default=False)
+    match_confidence = Column(Float, nullable=True, default=0.0)
+    auto_approve = Column(Boolean, nullable=True, default=False)
+    match_attempts = Column(Integer, nullable=True, default=0)
+    match_hits = Column(Integer, nullable=True, default=0)
 
     def __repr__(self):
         return f"<CfsSlotOverride(slot_id={self.slot_id})>"

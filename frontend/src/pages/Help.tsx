@@ -3,12 +3,11 @@ import { getExportLogsUrl } from '../api'
 
 const GITHUB_URL = 'https://github.com/GhostyAUS/k2-printer-analytics'
 
-type SectionId = 'dashboard' | 'print-jobs' | 'spools' | 'filament' | 'camera' | 'files' | 'analytics' | 'reports' | 'compare' | 'system' | 'settings' | 'diagnostics' | 'troubleshooting' | 'export'
+type SectionId = 'dashboard' | 'print-jobs' | 'filament' | 'camera' | 'files' | 'analytics' | 'reports' | 'compare' | 'system' | 'settings' | 'diagnostics' | 'troubleshooting' | 'export'
 
 const sections: { id: SectionId; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { id: 'print-jobs', label: 'Print Jobs', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-  { id: 'spools', label: 'Spools & CFS', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
   { id: 'filament', label: 'Filament Library', icon: 'M21 7.5l-2.25-1.313M21 7.5v2.25m0-2.25l-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3l2.25-1.313M12 12.75l-2.25-1.313M12 12.75V15m0 6.75l2.25-1.313M12 21.75V19.5m0 2.25l-2.25-1.313m0-16.875L12 2.25l2.25 1.313M21 14.25v2.25l-2.25 1.313m-13.5 0L3 14.25v2.25l2.25 1.313' },
   { id: 'camera', label: 'Camera', icon: 'M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z' },
   { id: 'files', label: 'Files', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z' },
@@ -64,7 +63,6 @@ const Help: React.FC = () => {
         <div className="flex-1 min-w-0">
           {activeSection === 'dashboard' && <DashboardHelp />}
           {activeSection === 'print-jobs' && <PrintJobsHelp />}
-          {activeSection === 'spools' && <SpoolsHelp />}
           {activeSection === 'filament' && <FilamentHelp />}
           {activeSection === 'camera' && <CameraHelp />}
           {activeSection === 'files' && <FilesHelp />}
@@ -103,7 +101,9 @@ const DashboardHelp = () => (
     <Li><strong>Print Thumbnail</strong> — When a print is active, a preview thumbnail is displayed from the printer's G-code metadata or 3MF project file. This helps identify prints at a glance.</Li>
     <Li><strong>Power Monitor</strong> — Real-time wattage graph from your Meross smart plug. Shows live power draw, average watts, and the history over the selected time range. Y-axis shows wattage, X-axis shows time markers.</Li>
     <Li><strong>Summary Cards</strong> — Quick stats for total prints, monthly cost, weekly activity, and filament usage.</Li>
-    <Li><strong>CFS Sidebar</strong> — When printing, shows which CFS slot is currently active, its material, color, and remaining weight. Active slot is highlighted.</Li>
+    <Li><strong>CFS Sidebar</strong> — When printing, shows which CFS slot is currently active, its material, color, and remaining weight. Active slot is highlighted. Click to navigate to the Filament Library.</Li>
+    <Li><strong>Print State Row</strong> — When printing, a compact row under the active print card shows State, Speed (%), Flow (%), and Print Time. These auto-hide when the printer is idle.</Li>
+    <Li><strong>Overtime Counter</strong> — When a print exceeds its estimated time and progress passes 100%, the progress bar turns red and a live count-up timer shows how much over the estimate the print has gone (e.g. "+2m 33s over estimate").</Li>
     <Li><strong>Recent Jobs</strong> — Shows last 8 jobs with thumbnail previews for quick identification.</Li>
     <Li><strong>Print Queue</strong> — Shows queued prints from Moonraker if any jobs are pending.</Li></ul>
     <H3>Tips</H3>
@@ -131,30 +131,27 @@ const PrintJobsHelp = () => (
   </div>
 )
 
-const SpoolsHelp = () => (
-  <div className="card p-6"><H2>Spools & CFS</H2>
-    <P>This page shows live data from your Creality K2's Colour Filament System (CFS), reflecting what the printer reports in real-time.</P>
-    <H3>Key Features</H3>
-    <ul><Li><strong>Slot Grid</strong> — All 16 slots (T1A-D, T2A-D, T3A-D, T4A-D) with material, color swatch, and remaining percentage.</Li>
-    <Li><strong>Active Slot Indicator</strong> — The currently feeding slot is highlighted during prints.</Li>
-    <Li><strong>Remaining Weight</strong> — Shows remaining weight in grams alongside percentage (e.g. "85% · 255g").</Li>
-    <Li><strong>Sync CFS to Library</strong> — Pulls current CFS data from Moonraker and creates/updates entries in the Filament Library. This should be run after changing spools.</Li></ul>
-    <H3>How CFS Tracking Works</H3>
-    <P>The system polls Moonraker every 5 seconds for CFS state. When the active slot changes, it records the measuring_wheel delta to calculate filament consumed. The <code className="text-accent-400">measuring_wheel</code> is per-tray (T1, T2), so cross-tray slot changes are handled safely without computing invalid deltas.</P>
-    <H3>Remaining Percentage</H3>
-    <P>CFS <code className="text-accent-400">remaining_pct</code> is the authoritative source. When a print ends, the system decrements remaining percentage based on actual filament consumed per slot. If you weigh a spool manually, use the Filament Library weigh function to update it precisely.</P>
-  </div>
-)
-
 const FilamentHelp = () => (
   <div className="card p-6"><H2>Filament Library</H2>
-    <P>The Filament Library is your personal inventory of filament spools, tracking remaining weight, cost, and metadata.</P>
+    <P>The Filament Library is the single source of truth for all filament spools and CFS slot data. The old CFS Units page has been merged into it.</P>
     <H3>Key Features</H3>
     <ul><Li><strong>Card Grid / Table View</strong> — Toggle between Spoolman-style card grid with SVG progress arcs and a detailed table.</Li>
     <Li><strong>Add Spool</strong> — Manually add a spool with brand, material, color, weight, and cost per kg.</Li>
-    <Li><strong>SpoolmanDB Picker</strong> — Search the SpoolmanDB database of 1800+ filaments to auto-fill brand, material, density, spool weight, and color when adding a new spool.</Li>
+    <Li><strong>SpoolmanDB Picker</strong> — Search the SpoolmanDB database of 1800+ filaments to auto-fill brand, material, density, spool weight, and color when adding or editing a spool.</Li>
     <Li><strong>Weigh Spool</strong> — Enter the total measured weight (spool + filament on a scale) to precisely calculate remaining filament by subtracting the empty spool weight.</Li>
-    <Li><strong>CFS Synced Spools</strong> — Spools with IDs like "T1A", "T2D" were auto-created from CFS sync and track remaining weight from printer data.</Li></ul>
+    <Li><strong>CFS Units Panel</strong> — Compact slot grid per CFS unit (T1–T4) at the top of the page. Each slot shows color swatch, material, remaining % with progress bar, live feeding/loading/standby badges, RFID tag indicator, and override indicator.</Li>
+    <Li><strong>Slot Override Modal</strong> — Click any CFS slot to edit override data: material, color, remaining %, spool weight, cost/kg. Use "Reset to CFS" to clear the override. Changes to remaining % automatically recalculate the roll's remaining weight in grams.</Li>
+    <Li><strong>Sync CFS → Library</strong> — Use the Sync button in the CFS Units panel to pull current CFS data from Moonraker and create/update entries. Run after changing spools.</Li>
+    <Li><strong>Weight Display</strong> — Grams display uses smart formatting: 1000+ shows as whole number (e.g. 950g), 100–999 shows 1 decimal (e.g. 543.2g), 10–99 shows 2 decimals, below 10 shows 3 decimals.</Li>
+    <Li><strong>Batch Multi-Select + Delete</strong> — Select multiple spools on cards or table rows and delete with two-step confirmation.</Li></ul>
+    <H3>How CFS Tracking Works</H3>
+    <P>The system polls Moonraker every 5 seconds for CFS state. When the active slot changes, it records the measuring_wheel delta to calculate filament consumed. The <code className="text-accent-400">measuring_wheel</code> is per-tray (T1, T2), so cross-tray slot changes are handled safely without computing invalid deltas.</P>
+    <H3>Slot States During Prints</H3>
+    <P>When a print is active, CFS slots show only two states: <strong>Feeding</strong> (pulsing blue — currently extruding filament) and <strong>Standby</strong> (all other non-empty slots). When idle, additional states like <strong>Loading</strong> (pulsing amber) may appear during filament changes.</P>
+    <H3>Remaining Percentage</H3>
+    <P>CFS <code className="text-accent-400">remaining_pct</code> is the authoritative source. When a print ends, the system decrements remaining percentage based on actual filament consumed per slot. If you weigh a spool manually, use the Filament Library weigh function to update it precisely. Editing the override remaining % will also recalculate the roll's weight in grams.</P>
+    <H3>Data Quality</H3>
+    <P>The system enforces several data quality rules: RFID-tagged spools always get <code className="text-accent-400">brand="Creality"</code>; <code className="text-accent-400">color_name</code> is derived from the hex color code (never from material name); locations use the format <code className="text-accent-400">CFS {slot_id}</code> (e.g. CFS T1A); removed partial rolls are marked <code className="text-accent-400">"Storage box"</code>; new/empty rolls are marked <code className="text-accent-400">"Shelf A"</code>.</P>
     <H3>Weighing a Spool</H3>
     <P>To weigh: place the spool on a scale, note the total weight, and enter it in the Weigh dialog. The system subtracts the <code className="text-accent-400">spool_weight_g</code> (empty spool tare) to calculate remaining filament. If spool weight is not set, only the total is recorded.</P>
   </div>
@@ -258,7 +255,7 @@ const DiagnosticsHelp = () => (
 
     <H3>Data & Logic Tests (10)</H3>
     <div className="space-y-3 mt-2 mb-4">
-      <DiagTest name="cfs_sync" desc="Checks that CFS slot data has been synced to the filament_library. If no entries with spool_id exist, run 'Sync CFS → Library' from the Spools page." />
+      <DiagTest name="cfs_sync" desc="Checks that CFS slot data has been synced to the filament_library. If no entries with spool_id exist, run 'Sync CFS → Library' from the Filament Library page." />
       <DiagTest name="color_normalization" desc="Validates all color_hex values in filament_library and cfs_slot_overrides start with '#'. CFS sends 7-char codes like '0ff614b' which must be normalized to '#ff614b'." />
       <DiagTest name="filament_cost_math" desc="Unit test: verifies 100g at $24/kg = $2.40. Catches floating point errors in cost calculation logic." />
       <DiagTest name="mw_delta" desc="Unit test: verifies |-500 - (-1000)| = 500mm. Validates the measuring_wheel delta calculation used for per-slot filament tracking." />
@@ -312,7 +309,7 @@ const TroubleshootingHelp = () => (
         checks={[
           'Ensure the CFS unit is powered on and connected to the printer',
           'Verify the CFS trays are properly seated (T1, T2 slots)',
-          'Run "Sync CFS → Library" from the Spools page after powering on the CFS',
+          'Run "Sync CFS → Library" from the Filament Library page after powering on the CFS',
           'Check the diagnostics test "moonraker_cfs_data" for slot count',
         ]}
       />

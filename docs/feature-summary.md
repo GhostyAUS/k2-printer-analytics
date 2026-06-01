@@ -6,7 +6,7 @@
 - Live print progress with M73 display_status
 - Power usage graph (last 60 min, updates every 10s)
 - KPI cards: total prints, cost, filament kg, hours, avg cost/print, success rate, projected monthly cost
-- CFS slot overview (8 slots T1A–T4D)
+- CFS slot overview (compact card with active slot + mini grid, links to Filament Library)
 - Print queue display when jobs are queued
 - Low stock filament warnings (<20%)
 - Maintenance progress bars (nozzle, belt, bearing) with reset buttons
@@ -19,12 +19,7 @@
 - Expandable rows with full job details
 - Historical cost backfill: 421 jobs with electricity_cost + filament_cost
 
-### Spools & CFS
-- Live CFS slot data from Moonraker (8 slots T1A–T4D)
-- CFS slot overrides for cost/kg and spool weight per slot
-- Material name resolution from CFS color codes
-
-### Filament Library
+### Filament Library (includes CFS Units)
 - Full CRUD for filament rolls (brand, material, color, weight, cost, location, slot)
 - Sortable columns (remaining%, cost/kg, brand, material)
 - Material filter and search
@@ -33,6 +28,13 @@
 - Bulk add: quantity field for adding multiple identical spools at once
 - CFS slot grouping: separate sections for CFS 1 (T1A–D), CFS 2 (T2A–D), and "Spools in Stock"
 - Slot-order sorting: T1A→T1D, T2A→T2D (not by remaining %)
+- **CFS Units panel**: Compact slot grid per unit (T1–T4) with color swatches, material, remaining %, progress bars, live feeding/loading/standby badges, RFID tags, override indicators
+- **Slot Override Modal**: Click any CFS slot to edit override (material, color, remaining %, spool weight, cost/kg, Reset to CFS) — handles manual updates when printer is off
+- **Sync CFS → Library button** in CFS Units panel header — pulls current CFS data from Moonraker and creates/updates filament library entries
+- **Data quality enforcement**: RFID rolls → brand="Creality"; color_name derived from color_hex via `color_name_from_hex()`; location format `"CFS {slot_id}"` when in CFS, `"Storage box"` or `"Shelf A"` when removed
+- **Weight display**: `formatGrams()` — 1000+ → whole number, 100–999 → 1dp, 10–99 → 2dp, <10 → 3dp
+- **CFS slot states during prints**: only "feeding" (pulsing blue) or "standby" shown; all non-feeding slots display "standby" when `is_printing=true`
+- **Override → roll sync**: Saving a slot override recalculates `remaining_weight_g` on the linked filament roll
 
 ### Camera
 - Live stream viewer (defaults to printer IP:8000/stream)
@@ -93,6 +95,9 @@
 - JWT auth: login, setup wizard, admin/user roles, 7-day token expiry
 - Bulk filament creation: `POST /api/v1/filament/bulk` with `{roll, quantity}`
 - Debug tests: 23 tests including filament_type null check
+- Startup migrations: fix brand (Creality for RFID), color_name from hex, location format (CFS {slot_id}), duplicate spool_id cleanup
+- Thumbnail backfill runs as background task (non-blocking startup)
+- CFS override save syncs remaining_weight_g to filament roll
 
 ### Deployment
 - Docker Compose: PostgreSQL, backend (FastAPI), frontend (Vite dev server), Prometheus
@@ -115,6 +120,8 @@
 
 ### High Priority
 - [ ] **Multi-stage Docker build** — production frontend should use nginx to serve built assets instead of Vite dev server; reduces image size and improves performance
+- [ ] **Remove dead endpoints** — `GET /cfs/slots`, `GET /cfs/active`, `backend/app/api/routes/spools.py` are unused after CFS consolidation
+- [ ] **Validate remaining_pct** — backend doesn't clamp `cfs_slot_overrides.remaining_pct` on write (T1A had 255%)
 
 ### Medium Priority
 - [ ] **AdGuard DNS setup helper** — simplified DNS rewrite instructions (user does this manually in their environment; just needs example configs)

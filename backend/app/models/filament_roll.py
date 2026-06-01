@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean
 from .base import BaseModel
 
 
@@ -17,6 +17,8 @@ class FilamentRoll(BaseModel):
     location = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
     spool_id = Column(String(10), nullable=True)
+    rfid_vendor = Column(String(100), nullable=True)
+    runout_detected = Column(Boolean, nullable=True, default=False)
 
     def __repr__(self):
         return f"<FilamentRoll(id={self.id}, {self.brand} {self.material})>"

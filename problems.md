@@ -22,6 +22,14 @@
 | P19 | Dead code (unused charts/hooks) | Deleted 6 files |
 | P20 | `analytics_service.py` wrong status strings | Rewrote to use `PrintStatus.COMPLETE` enum; removed dead `get_material_efficiency` |
 | P22 | Settings page only 8 CFS slots | Now generates all 16 (T1A-T4D) |
+| P25 | CFS Units page separate from Filament Library | CFS Units panel merged into Filament Library; Spools.tsx deleted; sidebar/route removed |
+| P26 | Wrong brand on RFID rolls (brand="CFS") | RFID rolls now get brand="Creality"; non-RFID "CFS" brand cleared; startup migration fixes existing |
+| P27 | color_name set to material name | `color_name_from_hex()` derives from hex; startup migration re-derives empty color_name |
+| P28 | Location format inconsistent (e.g. "CFS T1" instead of "CFS T1A") | All code paths use `f"CFS {slot_id}"`; removed rolls → "Storage box"/"Shelf A"; startup migration fixes existing |
+| P29 | Brand/material/color overwritten on sync | "Existing roll, no change" paths no longer overwrite material or color_hex |
+| P30 | CFS override save doesn't update roll weight | `_sync_roll_weight()` recalculates `remaining_weight_g` when override saved |
+| P31 | Thumbnail backfill blocks startup | Moved to background task with 120s timeout; startup completes in seconds |
+| P32 | Dashboard shows static "Exceeds estimation" text | Live count-up timer shows `+Xm Ys over estimate` when print exceeds 100% |
 
 ---
 
@@ -32,13 +40,8 @@
 - **Solution**: Created shared `aiohttp.ClientSession` in lifespan handler, stored on `app.state.http_session`. All routes (cfs, system, history) now use `request.app.state.http_session` instead of creating new sessions per request.
 
 ### P16: No authentication on endpoints
-- **Severity**: LOW (local network tool)
-- **Problem**: Anyone on network can read/modify everything.
-- **Solution options**:
-  1. **API key middleware** (recommended): Env var `API_KEY`, FastAPI middleware checks `X-API-Key` header or `?api_key=` param. Frontend stores key in localStorage.
-  2. **Basic auth**: Username/password via HTTP Basic. Simpler but less flexible.
-  3. **Skip**: Acceptable for trusted local network.
-- **Implementation**: 15-line middleware + env var + frontend login prompt.
+- **Severity**: LOW → **RESOLVED ✅**
+- **Solution**: JWT auth with login, setup wizard, admin/user roles. Auth middleware on all `/api/v1/` paths except public ones. 7-day token expiry.
 
 ### P17: Frontend uses dev server in production Docker
 - **Severity**: LOW

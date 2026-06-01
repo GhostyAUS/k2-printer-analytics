@@ -14,6 +14,7 @@ class CfsSlotUsage(BaseModel):
     measuring_wheel_end = Column(Float, nullable=True)
     filament_used_mm = Column(Float, nullable=True)
     filament_used_g = Column(Float, nullable=True)
+    checkpoint_g = Column(Float, nullable=True)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
 

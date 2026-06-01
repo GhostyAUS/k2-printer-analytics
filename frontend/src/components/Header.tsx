@@ -27,7 +27,6 @@ const Header: React.FC<{ onMenuToggle?: () => void }> = ({ onMenuToggle }) => {
   const pageNames: Record<string, string> = {
     '/': 'Dashboard',
     '/print-jobs': 'Print Jobs',
-    '/spools': 'Spools & CFS',
     '/filament': 'Filament Library',
     '/camera': 'Camera',
     '/files': 'Files',

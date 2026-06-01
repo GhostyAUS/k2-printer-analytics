@@ -53,7 +53,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://192.168.1.203:8000
+      - VITE_API_URL=
     depends_on:
       - backend
     networks:

@@ -7,5 +7,6 @@ from .cfs_slot_usage import CfsSlotUsage
 from .app_config import AppConfig
 from .filament_roll import FilamentRoll
 from .user import User
+from .cfs_match_vote import CfsMatchVote
 
-__all__ = ["BaseModel", "Spool", "PrintJob", "PrintStatus", "PowerLog", "CfsSlotOverride", "CfsSlotUsage", "AppConfig", "FilamentRoll", "User"]
+__all__ = ["BaseModel", "Spool", "PrintJob", "PrintStatus", "PowerLog", "CfsSlotOverride", "CfsSlotUsage", "AppConfig", "FilamentRoll", "User", "CfsMatchVote"]

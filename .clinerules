@@ -1,0 +1,48 @@
+# Project Context
+
+Full-stack K2 printer analytics platform with:
+- Backend: FastAPI (Python), PostgreSQL, async Moonraker polling
+- Frontend: React + Vite + TypeScript, TailwindCSS
+- Monitoring: Grafana dashboards, Prometheus scraping
+- Auth: JWT with 7-day tokens, SHA256+salt password hashing
+
+## Key Conventions
+
+- PrintStatus enum UPPERCASE: COMPLETE, CANCELLED, PRINTING, FAILED
+- Use `datetime.now(timezone.utc)` NOT `datetime.utcnow()`
+- No `depends_on: moonraker` in docker-compose.yml
+- Moonraker at 192.168.1.146:7125
+- Power rate: $0.49/kWh AUD, TZ: Australia/Perth
+- Backend Dockerfile: no `--reload` flag
+- Frontend: Vite dev server on port 3000, proxies `/api` → backend:8000
+
+## Code Style
+
+- NO comments in code unless absolutely necessary
+- Concise, direct responses
+- Mimic existing code style and patterns
+- Use existing libraries, don't add new ones without checking
+- Never add emojis unless asked
+
+## Workflow
+
+- Before making changes, understand the codebase structure
+- After changes, run lint/typecheck if available
+- Verify with tests when possible (23 debug tests available)
+- Never commit unless explicitly asked
+- Add session context to AGENTS.md or SESSION.md as we work
+
+## Filament & CFS
+
+- CFS slot ID is positional (T1A), not physical spool
+- measuring_wheel is per-TRAY, NOT per-slot
+- Use `cfs_slot_overrides.remaining_pct` as authoritative (not CFS remain_len)
+- RFID vendor provides unique spool identity when available
+- Color hex codes stored with `#` prefix, normalized to 6 chars
+- Spool change detection: color_hex + rfid_vendor mismatch
+
+## Deployment
+
+- Deploy: tar + ssh to Proxmox CT 104 at 192.168.1.203
+- DB: PostgreSQL k2user:k2pass@db:5432/k2_analytics
+- Container rebuild: docker compose up -d --build

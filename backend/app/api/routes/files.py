@@ -251,11 +251,9 @@ async def get_thumbnail_image(request: Request, db: Session = Depends(get_db), f
     return Response(status_code=404, content=b"Not found")
 
 
-@router.post("/thumbnail-backfill")
-async def thumbnail_backfill(request: Request, db: Session = Depends(get_db), limit: int = Query(100, ge=1, le=500)):
+async def _run_thumbnail_backfill(session: aiohttp.ClientSession, db: Session, limit: int = 100) -> dict:
     """Extract and save thumbnails for jobs that don't have one yet."""
     from app.models.print_job import PrintJob
-    session = await _get_session(request)
     moonraker_url = _get_moonraker_url(db)
 
     jobs = db.query(PrintJob).filter(PrintJob.thumbnail_path.is_(None)).order_by(PrintJob.id.desc()).limit(limit).all()
@@ -284,3 +282,10 @@ async def thumbnail_backfill(request: Request, db: Session = Depends(get_db), li
 
     db.commit()
     return {"updated": updated, "failed": failed, "skipped": len(jobs) - updated - failed, "checked": len(jobs)}
+
+
+@router.post("/thumbnail-backfill")
+async def thumbnail_backfill(request: Request, db: Session = Depends(get_db), limit: int = Query(100, ge=1, le=500)):
+    """Extract and save thumbnails for jobs that don't have one yet."""
+    session = await _get_session(request)
+    return await _run_thumbnail_backfill(session, db, limit=limit)

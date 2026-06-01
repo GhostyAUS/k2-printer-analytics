@@ -63,8 +63,7 @@ sudo ./install/master.sh --skip-prerequisites --moonraker-host 10.0.0.50
 - **Dashboard** — Live print progress, power usage, CFS slot status, maintenance tracking
 - **Print Jobs** — Paginated history with sorting, filtering, and cost breakdowns
 - **Analytics** — Monthly cost trends, slicer accuracy (±h:mm:ss), CSV export
-- **Filament Library** — Track inventory, cost/kg, remaining weight; SpoolmanDB picker; bulk add; CFS slot grouping (T1A–D, T2A–D)
-- **CFS Units** — Live Colour Fabric Station data from Moonraker
+- **Filament Library** — Track inventory, cost/kg, remaining weight; SpoolmanDB picker; bulk add; integrated CFS Units panel with live slot data, override editing, and Sync CFS→Library
 - **Files** — Browse gcode files on the printer with metadata previews and thumbnails
 - **Compare** — Side-by-side comparison of any two print jobs
 - **Camera** — Live stream viewer (requires camera module enabled on printer)

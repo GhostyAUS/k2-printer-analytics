@@ -108,6 +108,9 @@ export interface CfsSlot {
   cost_per_kg?: number | null
   spool_weight_g?: number | null
   estimated_spool_cost?: number | null
+  rfid_vendor?: string | null
+  calibrated?: boolean
+  runout_detected?: boolean
 }
 
 export interface CfsSlotOverride {
@@ -118,6 +121,7 @@ export interface CfsSlotOverride {
   remaining_pct?: number | null
   cost_per_kg?: number | null
   spool_weight_g?: number | null
+  calibrated?: boolean | null
 }
 
 export interface FilamentRoll {
@@ -136,4 +140,6 @@ export interface FilamentRoll {
   location: string | null
   notes: string | null
   spool_id: string | null
+  rfid_vendor: string | null
+  runout_detected: boolean | null
 }

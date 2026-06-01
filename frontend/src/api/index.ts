@@ -1,8 +1,8 @@
 import axios from 'axios'
-import type { PrintJob, Spool, CfsSlot, CfsSlotOverride, FilamentRoll } from '../types'
+import type { PrintJob, CfsSlotOverride, FilamentRoll } from '../types'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_URL || '',
   timeout: 10000,
 })
 
@@ -56,22 +56,13 @@ export async function fetchJob(id: number): Promise<PrintJob> {
   return data
 }
 
-export async function fetchSpools(): Promise<Spool[]> {
-  const { data } = await api.get('/api/v1/spools/')
+export async function fetchCfsSlotOverrides(): Promise<CfsSlotOverride[]> {
+  const { data } = await api.get('/api/v1/cfs/overrides/')
   return data
 }
 
-export async function fetchCfsSlots(): Promise<{ slots: CfsSlot[]; is_printing: boolean }> {
-  const { data } = await api.get('/api/v1/cfs/slots')
-  return data
-}
-
-export async function fetchActiveSlot(): Promise<{
-  active_slot: CfsSlot | null
-  slots: CfsSlot[]
-  is_printing: boolean
-}> {
-  const { data } = await api.get('/api/v1/cfs/active')
+export async function fetchCfsState(): Promise<{ active_slot_id: string | null; feed_state: string; is_printing: boolean; slot_states: Record<string, string> }> {
+  const { data } = await api.get('/api/v1/cfs/state', { timeout: 3000 })
   return data
 }
 
@@ -101,8 +92,7 @@ export async function fetchPrintSessionPower(): Promise<{
 }
 
 export async function fetchCfsOverrides(): Promise<CfsSlotOverride[]> {
-  const { data } = await api.get('/api/v1/cfs/overrides')
-  return data
+  return fetchCfsSlotOverrides()
 }
 
 export async function upsertCfsOverride(slotId: string, override: Partial<CfsSlotOverride>): Promise<CfsSlotOverride> {
@@ -126,6 +116,16 @@ export async function setSetting(key: string, value: string): Promise<{ key: str
 
 export async function resetSetting(key: string): Promise<{ key: string; value: string | null; default: boolean }> {
   const { data } = await api.delete(`/api/v1/settings/${key}`)
+  return data
+}
+
+export interface FilamentLocations {
+  existing_locations: string[]
+  cfs_units: Record<string, string[]>
+}
+
+export async function fetchFilamentLocations(): Promise<FilamentLocations> {
+  const { data } = await api.get('/api/v1/filament/locations')
   return data
 }
 
@@ -230,7 +230,7 @@ export async function updateNotificationConfig(config: Record<string, string>): 
 }
 
 export function getExportCsvUrl(): string {
-  return (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1/analytics/export/csv'
+  return (import.meta.env.VITE_API_URL || '') + '/api/v1/analytics/export/csv'
 }
 
 export interface PrinterFile {
@@ -372,12 +372,12 @@ export async function runAllDebugTests(): Promise<{
 }
 
 export function getExportLogsUrl(): string {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const base = import.meta.env.VITE_API_URL || ''
   return `${base}/api/v1/debug/export-logs`
 }
 
 export function getThumbnailUrl(filename: string): string {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const base = import.meta.env.VITE_API_URL || ''
   const token = localStorage.getItem('k2_token') || ''
   return `${base}/api/v1/files/thumbnail-image?filename=${encodeURIComponent(filename)}&token=${encodeURIComponent(token)}`
 }

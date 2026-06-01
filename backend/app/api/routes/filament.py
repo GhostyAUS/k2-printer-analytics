@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import distinct
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -23,6 +24,7 @@ class FilamentRollCreate(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     spool_id: Optional[str] = None
+    rfid_vendor: Optional[str] = None
 
 
 class BulkCreateRequest(BaseModel):
@@ -43,6 +45,7 @@ class FilamentRollUpdate(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     spool_id: Optional[str] = None
+    rfid_vendor: Optional[str] = None
 
 
 class FilamentRollResponse(BaseModel):
@@ -61,9 +64,16 @@ class FilamentRollResponse(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     spool_id: Optional[str] = None
+    rfid_vendor: Optional[str] = None
+    runout_detected: Optional[bool] = None
 
     class Config:
         from_attributes = True
+
+
+class LocationsResponse(BaseModel):
+    existing_locations: List[str]
+    cfs_units: dict[str, List[str]]
 
 
 class WeighRequest(BaseModel):
@@ -98,6 +108,21 @@ def create_bulk(data: BulkCreateRequest, db: Session = Depends(get_db)):
     return rolls
 
 
+@router.get("/locations", response_model=LocationsResponse)
+def list_locations(db: Session = Depends(get_db)):
+    rows = db.query(distinct(FilamentRoll.location)).filter(
+        FilamentRoll.location.isnot(None), FilamentRoll.location != ""
+    ).all()
+    existing = sorted(r[0] for r in rows if r[0])
+    cfs_units = {
+        "CFS 1": ["T1A", "T1B", "T1C", "T1D"],
+        "CFS 2": ["T2A", "T2B", "T2C", "T2D"],
+        "CFS 3": ["T3A", "T3B", "T3C", "T3D"],
+        "CFS 4": ["T4A", "T4B", "T4C", "T4D"],
+    }
+    return LocationsResponse(existing_locations=existing, cfs_units=cfs_units)
+
+
 @router.get("/{roll_id}", response_model=FilamentRollResponse)
 def get_roll(roll_id: int, db: Session = Depends(get_db)):
     roll = db.query(FilamentRoll).filter(FilamentRoll.id == roll_id).first()
@@ -111,7 +136,16 @@ def update_roll(roll_id: int, data: FilamentRollUpdate, db: Session = Depends(ge
     roll = db.query(FilamentRoll).filter(FilamentRoll.id == roll_id).first()
     if not roll:
         raise HTTPException(status_code=404, detail="Filament roll not found")
-    for key, val in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    if "spool_id" in updates and updates["spool_id"]:
+        old = db.query(FilamentRoll).filter(
+            FilamentRoll.spool_id == updates["spool_id"],
+            FilamentRoll.id != roll_id
+        ).first()
+        if old:
+            old.spool_id = None
+            old.location = "Storage box" if (old.remaining_weight_g or 0) > 0 else "Shelf A"
+    for key, val in updates.items():
         setattr(roll, key, val)
     db.commit()
     db.refresh(roll)

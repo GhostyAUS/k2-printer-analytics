@@ -5,7 +5,6 @@ import { fetchAuthStatus } from './api'
 
 const Dashboard = lazy(() => import('./pages/Dashboard.tsx'))
 const PrintJobs = lazy(() => import('./pages/PrintJobs.tsx'))
-const Spools = lazy(() => import('./pages/Spools.tsx'))
 const Camera = lazy(() => import('./pages/Camera.tsx'))
 const Analytics = lazy(() => import('./pages/Analytics.tsx'))
 const SystemHealth = lazy(() => import('./pages/SystemHealth.tsx'))
@@ -126,7 +125,6 @@ function App() {
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
               <Route path="print-jobs" element={<PrintJobs />} />
-              <Route path="spools" element={<Spools />} />
               <Route path="filament" element={<FilamentLibrary />} />
               <Route path="camera" element={<Camera />} />
               <Route path="files" element={<Files />} />
