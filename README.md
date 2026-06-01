@@ -22,7 +22,7 @@ sudo ./install/master.sh --moonraker-host 192.168.1.146
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--moonraker-host` | `192.168.1.146` | Moonraker IP address |
+| `--moonraker-host` | `192.168.1.1` | Moonraker IP address |
 | `--moonraker-port` | `7125` | Moonraker port |
 | `--meross-email` | _(empty)_ | Meross smart plug email |
 | `--meross-password` | _(empty)_ | Meross smart plug password |
