@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
-import { fetchFilamentRolls, createFilamentRolls, updateFilamentRoll, deleteFilamentRoll, weighFilamentRoll, fetchCfsState, fetchCfsSlotOverrides, upsertCfsOverride, resetCfsOverride, syncCfsToLibrary, searchSpoolmanDBFilaments, fetchSpoolmanDBBrands, fetchSpoolmanDBMaterialNames } from '../api'
+import { fetchFilamentRolls, createFilamentRolls, updateFilamentRoll, deleteFilamentRoll, weighFilamentRoll, fetchCfsState, fetchCfsSlotOverrides, upsertCfsOverride, resetCfsOverride, syncCfsToLibrary, fetchOFDBrands, fetchOFDMaterials, searchOFDFilaments } from '../api'
 import type { FilamentRoll, CfsSlotOverride } from '../types'
-import type { SpoolmanDBFilament } from '../api'
+import type { OFDFilamentResult } from '../api'
 
 const MATERIALS = ['PLA', 'PLA+', 'PETG', 'ABS', 'ASA', 'TPU', 'NYLON', 'PC', 'HIPS', 'PVA', 'CUSTOM']
 const MATERIAL_COLORS: Record<string, string> = {
@@ -675,10 +675,10 @@ const SpoolCard = React.memo<{ roll: FilamentRoll; onEdit: () => void; onWeigh: 
   )
 })
 
-const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = ({ onSelect }) => {
-  const [filaments, setFilaments] = useState<SpoolmanDBFilament[]>([])
-  const [brands, setBrands] = useState<string[]>([])
-  const [dbMaterials, setDbMaterials] = useState<string[]>([])
+const FilamentPicker: React.FC<{ onSelect: (f: OFDFilamentResult) => void }> = ({ onSelect }) => {
+  const [results, setResults] = useState<OFDFilamentResult[]>([])
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
+  const [materials, setMaterials] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedBrand, setSelectedBrand] = useState('')
@@ -686,13 +686,13 @@ const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = 
   const [hasSearched, setHasSearched] = useState(false)
 
   useEffect(() => {
-    fetchSpoolmanDBBrands().then(setBrands).catch(() => {})
-    fetchSpoolmanDBMaterialNames().then(setDbMaterials).catch(() => {})
+    fetchOFDBrands().then(setBrands).catch(() => {})
+    fetchOFDMaterials().then(setMaterials).catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!search && !selectedBrand && !selectedMaterial) {
-      setFilaments([])
+      setResults([])
       setHasSearched(false)
       return
     }
@@ -700,14 +700,14 @@ const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = 
     const t = setTimeout(async () => {
       setLoading(true)
       try {
-        const results = await searchSpoolmanDBFilaments({
-          brand: selectedBrand || undefined,
+        const res = await searchOFDFilaments({
+          brand_id: selectedBrand || undefined,
           material: selectedMaterial || undefined,
           search: search || undefined,
           limit: 50,
         })
-        setFilaments(results)
-      } catch { setFilaments([]) }
+        setResults(res)
+      } catch { setResults([]) }
       finally { setLoading(false) }
     }, 300)
     return () => clearTimeout(t)
@@ -728,12 +728,15 @@ const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = 
           <svg className="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
-          <span className="text-xs font-medium text-surface-300">Search SpoolmanDB Catalog</span>
+          <span className="text-xs font-medium text-surface-300">Open Filament Database</span>
           {loading && <div className="w-3 h-3 border border-accent-500 border-t-transparent rounded-full animate-spin" />}
         </div>
-        {activeFilters.length > 0 && (
-          <button onClick={clearFilters} className="text-[10px] text-surface-500 hover:text-surface-300 transition-colors">Clear all</button>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-surface-500">{brands.length} brands · {materials.length} materials</span>
+          {activeFilters.length > 0 && (
+            <button onClick={clearFilters} className="text-[10px] text-surface-500 hover:text-surface-300 transition-colors">Clear all</button>
+          )}
+        </div>
       </div>
       <div className="flex gap-2 mb-2">
         <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder='e.g. "Silk", "Matte", "Galaxy"...'
@@ -741,34 +744,35 @@ const FilamentPicker: React.FC<{ onSelect: (f: SpoolmanDBFilament) => void }> = 
         <select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}
           className="bg-surface-800 border border-surface-700 rounded px-2 py-1.5 text-sm text-surface-300 focus:outline-none focus:border-accent-500 max-w-[180px]">
           <option value="">All Brands</option>
-          {brands.slice(0, 80).map(b => <option key={b} value={b}>{b}</option>)}
+          {brands.slice(0, 150).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         <select value={selectedMaterial} onChange={e => setSelectedMaterial(e.target.value)}
           className="bg-surface-800 border border-surface-700 rounded px-2 py-1.5 text-sm text-surface-300 focus:outline-none focus:border-accent-500">
           <option value="">All Materials</option>
-          {dbMaterials.map(m => <option key={m} value={m}>{m}</option>)}
+          {materials.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
         </select>
       </div>
-      {filaments.length > 0 && (
-        <div className="max-h-48 overflow-y-auto space-y-0.5">
-          {filaments.map(f => (
-            <button key={f.id} onClick={() => onSelect(f)}
+      {results.length > 0 && (
+        <div className="max-h-56 overflow-y-auto space-y-0.5">
+          {results.map((f, i) => (
+            <button key={`${f.variant_id}-${f.size_id}-${i}`} onClick={() => onSelect(f)}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-700 transition-colors text-left">
-              {f.color_hex && <div className="w-4 h-4 rounded-sm shrink-0 border border-surface-600" style={{ backgroundColor: f.color_hex.startsWith('#') ? f.color_hex : `#${f.color_hex}` }} />}
-              <span className="text-xs text-surface-200 font-medium truncate">{f.manufacturer}</span>
-              <span className="text-xs text-surface-400 truncate">{f.name}</span>
+              {f.color_hex && <div className="w-4 h-4 rounded-sm shrink-0 border border-surface-600" style={{ backgroundColor: f.color_hex }} />}
+              <span className="text-xs text-surface-200 font-medium truncate">{f.brand}</span>
+              <span className="text-xs text-surface-400 truncate">{f.filament_name}</span>
+              {f.variant_name && <span className="text-[10px] text-surface-400 truncate">{f.variant_name}</span>}
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-700 text-surface-400 shrink-0">{f.material}</span>
-              <span className="text-[10px] text-surface-500 shrink-0">{f.weight}g</span>
-              {f.extruder_temp && <span className="text-[10px] text-surface-500 shrink-0">{f.extruder_temp}°C</span>}
+              {f.filament_weight && <span className="text-[10px] text-surface-500 shrink-0">{f.filament_weight}g</span>}
+              {f.min_print_temperature && f.max_print_temperature && <span className="text-[10px] text-surface-500 shrink-0">{f.min_print_temperature}–{f.max_print_temperature}°C</span>}
             </button>
           ))}
         </div>
       )}
-      {hasSearched && !loading && filaments.length === 0 && (
+      {hasSearched && !loading && results.length === 0 && (
         <p className="text-xs text-surface-500 py-2">No filaments found — try adjusting filters</p>
       )}
       {!hasSearched && (
-        <p className="text-xs text-surface-500 py-2">Select a brand, material, or type a keyword to search</p>
+        <p className="text-xs text-surface-500 py-2">Select a brand, material, or type a keyword to search the OFD catalog</p>
       )}
     </div>
   )
@@ -906,19 +910,16 @@ const SpoolForm: React.FC<{
     }
   }, [selectedLocation, selectedSlot])
 
-  const applyFilament = (f: SpoolmanDBFilament) => {
-    const hex = f.color_hex
-      ? (f.color_hex.startsWith('#') ? f.color_hex : `#${f.color_hex}`)
-      : undefined
+  const applyFilament = (f: OFDFilamentResult) => {
+    const hex = f.color_hex || undefined
     setForm(p => ({
       ...p,
-      brand: f.manufacturer,
+      brand: f.brand,
       material: f.material.toUpperCase().replace(/[^A-Z0-9+]/g, '') || p.material,
-      color_name: f.name || p.color_name,
+      color_name: f.variant_name || f.filament_name || p.color_name,
       color_hex: hex || p.color_hex,
-      total_weight_g: f.weight || 1000,
-      spool_weight_g: f.spool_weight || 0,
-      remaining_weight_g: f.weight || 1000,
+      total_weight_g: f.filament_weight || 1000,
+      remaining_weight_g: f.filament_weight || 1000,
     }))
     setShowPicker(false)
   }
@@ -933,7 +934,7 @@ const SpoolForm: React.FC<{
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
-            SpoolmanDB
+            OFD
           </button>
           <div className="w-6 h-6 rounded border border-surface-600" style={{ backgroundColor: form.color_hex }} />
           <input type="color" value={form.color_hex} onChange={e => setForm(p => ({ ...p, color_hex: e.target.value }))}

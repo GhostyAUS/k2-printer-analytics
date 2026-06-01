@@ -5,7 +5,8 @@
 ### Dashboard
 - Live print progress with M73 display_status
 - Power usage graph (last 60 min, updates every 10s)
-- KPI cards: total prints, cost, filament kg, hours, avg cost/print, success rate, projected monthly cost
+- KPI cards: ~~total prints, cost, filament kg, hours, avg cost/print, success rate, projected monthly cost~~ (moved to System page)
+- **Printer Status card** — Always-visible card showing State, Speed (%), Flow (%), Print Time. Shows "N/A" when idle.
 - CFS slot overview (compact card with active slot + mini grid, links to Filament Library)
 - Print queue display when jobs are queued
 - Low stock filament warnings (<20%)
@@ -25,6 +26,7 @@
 - Material filter and search
 - Auto-decrement on print completion (matches by material type)
 - SpoolmanDB catalog picker (auto-opens on add)
+- **Open Filament Database (OFD) picker** — Replaced SpoolmanDB with OFD: 139 brands, 1978 filaments, 14219 variants, 22238 sizes. Bulk `all.json.gz` download on startup with 24h cache. Search by brand, material, or keyword. Hierarchical Brand→Material→Variant→Size results with color swatches and temperature ranges.
 - Bulk add: quantity field for adding multiple identical spools at once
 - CFS slot grouping: separate sections for CFS 1 (T1A–D), CFS 2 (T2A–D), and "Spools in Stock"
 - Slot-order sorting: T1A→T1D, T2A→T2D (not by remaining %)
@@ -65,6 +67,7 @@
 - Percentage difference highlighting (green ≤5%, amber ≤20%, red >20%)
 
 ### System Health
+- **Print Analytics** — Summary cards: total prints, total cost, filament used, print hours, this month, success rate (moved from Dashboard)
 - Moonraker system info (CPU, memory, uptime, etc.)
 - Live power readings from Meross smart plug
 - Meross plug on/off control
@@ -95,6 +98,7 @@
 - JWT auth: login, setup wizard, admin/user roles, 7-day token expiry
 - Bulk filament creation: `POST /api/v1/filament/bulk` with `{roll, quantity}`
 - Debug tests: 23 tests including filament_type null check
+- **Open Filament Database (OFD)**: `backend/app/services/ofd.py` — downloads `all.json.gz` on startup, caches in memory (24h TTL), daily background refresh. `backend/app/api/routes/ofd.py` — `GET /ofd/brands`, `GET /ofd/materials`, `GET /ofd/search`. Field mapping: `brand.name`→`brand`, `material`→`material`, `variant.name`→`color_name`, `variant.color_hex`→`color_hex`, `size.filament_weight`→`total_weight_g`
 - Startup migrations: fix brand (Creality for RFID), color_name from hex, location format (CFS {slot_id}), duplicate spool_id cleanup
 - Thumbnail backfill runs as background task (non-blocking startup)
 - CFS override save syncs remaining_weight_g to filament roll
@@ -121,6 +125,7 @@
 ### High Priority
 - [ ] **Multi-stage Docker build** — production frontend should use nginx to serve built assets instead of Vite dev server; reduces image size and improves performance
 - [ ] **Remove dead endpoints** — `GET /cfs/slots`, `GET /cfs/active`, `backend/app/api/routes/spools.py` are unused after CFS consolidation
+- [ ] **Remove old SpoolmanDB route** — `backend/app/api/routes/spoolmandb.py` still registered but frontend no longer calls it
 - [ ] **Validate remaining_pct** — backend doesn't clamp `cfs_slot_overrides.remaining_pct` on write (T1A had 255%)
 
 ### Medium Priority

@@ -63,12 +63,12 @@ sudo ./install/master.sh --skip-prerequisites --moonraker-host 10.0.0.50
 - **Dashboard** — Live print progress, power usage, CFS slot status, maintenance tracking
 - **Print Jobs** — Paginated history with sorting, filtering, and cost breakdowns
 - **Analytics** — Monthly cost trends, slicer accuracy (±h:mm:ss), CSV export
-- **Filament Library** — Track inventory, cost/kg, remaining weight; SpoolmanDB picker; bulk add; integrated CFS Units panel with live slot data, override editing, and Sync CFS→Library
+- **Filament Library** — Track inventory, cost/kg, remaining weight; Open Filament Database picker (139 brands, 14k variants); bulk add; integrated CFS Units panel with live slot data, override editing, and Sync CFS→Library
 - **Files** — Browse gcode files on the printer with metadata previews and thumbnails
 - **Compare** — Side-by-side comparison of any two print jobs
 - **Camera** — Live stream viewer (requires camera module enabled on printer)
 - **Reports** — Daily/weekly/monthly reports with cost, filament, and print hour breakdowns
-- **System** — Moonraker system info, power readings, Meross smart plug control
+- **System** — Print analytics (totals, cost, filament, hours, success rate), Moonraker system info, temperatures, fans, MCU stats, power readings, Meross smart plug control
 - **Settings** — Configure Moonraker connection, Meross credentials, power rates, notifications
 - **Auth** — JWT login with setup wizard, admin/user roles
 - **Grafana Dashboards** — 7 pre-built dashboards (Print Operations, Power & Energy, Filament & CFS, Cost Analytics, Slicer Accuracy, System Health, Moonraker Live)

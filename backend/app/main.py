@@ -30,6 +30,7 @@ from app.api.routes.files import router as files_router
 from app.api.routes.spoolmandb import router as spoolmandb_router
 from app.api.routes.debug import router as debug_router
 from app.api.routes.match_vote import router as match_vote_router
+from app.api.routes.ofd import router as ofd_router
 from app.websocket.handlers import handle_websocket
 from app.services.print_tracker import print_tracker
 from app.core.database import Base, engine
@@ -57,6 +58,16 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Startup thumbnail backfill failed: {e}")
 
     asyncio.create_task(_background_thumbnail_backfill())
+
+    async def _background_ofd_load():
+        try:
+            from app.services.ofd import load_ofd_data, start_ofd_refresh_loop
+            await load_ofd_data(app.state.http_session)
+            start_ofd_refresh_loop(app)
+        except Exception as e:
+            logger.warning(f"Startup OFD load failed: {e}")
+
+    asyncio.create_task(_background_ofd_load())
 
     yield
     print_tracker.stop()
@@ -331,6 +342,7 @@ def create_app() -> FastAPI:
     app.include_router(spoolmandb_router, prefix="/api/v1")
     app.include_router(debug_router, prefix="/api/v1")
     app.include_router(match_vote_router, prefix="/api/v1")
+    app.include_router(ofd_router, prefix="/api/v1")
     
     Instrumentator().instrument(app).expose(app)
     

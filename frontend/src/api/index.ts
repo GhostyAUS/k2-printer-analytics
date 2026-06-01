@@ -72,7 +72,7 @@ export async function fetchPrinterStats(): Promise<any> {
 }
 
 export async function fetchPrinterStatus(): Promise<any> {
-  const { data } = await api.get('/api/v1/printer/status')
+  const { data } = await api.get('/api/v1/system/printer-status')
   return data
 }
 
@@ -295,6 +295,58 @@ export async function register(username: string, password: string): Promise<{ ac
 
 export async function fetchAuthStatus(): Promise<{ initialized: boolean; authenticated: boolean; username: string | null; is_admin: boolean }> {
   const { data } = await api.get('/api/v1/auth/status')
+  return data
+}
+
+export interface OFDBrand {
+  id: string
+  name: string
+  slug: string
+}
+
+export interface OFDMaterial {
+  id: string
+  name: string
+  material_class: string
+}
+
+export interface OFDFilamentResult {
+  brand: string
+  material: string
+  filament_name: string
+  variant_name: string
+  color_hex: string | null
+  traits: Record<string, any> | null
+  density: number | null
+  diameter: number | null
+  filament_weight: number | null
+  min_print_temperature: number | null
+  max_print_temperature: number | null
+  min_bed_temperature: number | null
+  max_bed_temperature: number | null
+  filament_id: string | null
+  variant_id: string | null
+  size_id: string | null
+  discontinued: boolean
+}
+
+export async function fetchOFDBrands(search?: string): Promise<OFDBrand[]> {
+  const { data } = await api.get('/api/v1/ofd/brands', { params: search ? { search } : {} })
+  return data
+}
+
+export async function fetchOFDMaterials(brandId?: string): Promise<OFDMaterial[]> {
+  const { data } = await api.get('/api/v1/ofd/materials', { params: brandId ? { brand_id: brandId } : {} })
+  return data
+}
+
+export async function searchOFDFilaments(params: {
+  brand_id?: string
+  material?: string
+  search?: string
+  limit?: number
+}): Promise<OFDFilamentResult[]> {
+  const { data } = await api.get('/api/v1/ofd/search', { params })
   return data
 }
 

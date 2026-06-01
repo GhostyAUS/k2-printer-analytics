@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import api from '../api'
+import { fetchSummary } from '../api'
 
 interface PrinterStatus {
   extruder: { temperature: number | null; target: number | null; power: number | null; nozzle_diameter: number | null; pressure_advance: number | null }
@@ -63,6 +64,7 @@ const StatCard: React.FC<{ label: string; value: string; sub?: string; color: st
 const SystemHealth: React.FC = () => {
   const [status, setStatus] = useState<PrinterStatus | null>(null)
   const [error, setError] = useState(false)
+  const [summary, setSummary] = useState<any>(null)
 
   const load = async () => {
     try {
@@ -75,6 +77,10 @@ const SystemHealth: React.FC = () => {
     load()
     const interval = setInterval(load, 3000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    fetchSummary().then(setSummary).catch(() => {})
   }, [])
 
   const fmtUptime = (s: number | null): string => {
@@ -105,6 +111,39 @@ const SystemHealth: React.FC = () => {
         </div>
         {status && <div className="flex items-center gap-2 text-xs text-surface-500"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />Live · 3s</div>}
       </div>
+
+      {summary && (
+        <div>
+          <h2 className="text-sm font-semibold text-surface-300 uppercase tracking-wider mb-3">Print Analytics</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="card"><div className="card-body">
+              <span className="stat-label">Total Prints</span>
+              <p className="stat-value">{summary.total_prints ?? '—'}</p>
+            </div></div>
+            <div className="card"><div className="card-body">
+              <span className="stat-label">Total Cost</span>
+              <p className="stat-value text-amber-400">${summary.total_cost?.toFixed(2) ?? '—'}</p>
+            </div></div>
+            <div className="card"><div className="card-body">
+              <span className="stat-label">Filament Used</span>
+              <p className="stat-value text-emerald-400">{summary.total_filament_kg ?? '—'} kg</p>
+            </div></div>
+            <div className="card"><div className="card-body">
+              <span className="stat-label">Print Hours</span>
+              <p className="stat-value text-sky-400">{summary.total_print_hours ?? '—'}h</p>
+            </div></div>
+            <div className="card"><div className="card-body">
+              <span className="stat-label">This Month</span>
+              <p className="stat-value text-violet-400">{summary.month?.prints ?? '—'} prints · ${summary.month?.cost ?? '—'}</p>
+              {summary.month?.projected_monthly_cost > 0 && <p className="text-[10px] text-surface-500 mt-0.5">Projected: ${summary.month.projected_monthly_cost}/mo</p>}
+            </div></div>
+            <div className="card"><div className="card-body">
+              <span className="stat-label">Success Rate</span>
+              <p className="stat-value">{summary.success_rate ?? '—'}%</p>
+            </div></div>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="text-sm font-semibold text-surface-300 uppercase tracking-wider mb-3">Temperatures</h2>

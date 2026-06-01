@@ -30,6 +30,10 @@
 | P30 | CFS override save doesn't update roll weight | `_sync_roll_weight()` recalculates `remaining_weight_g` when override saved |
 | P31 | Thumbnail backfill blocks startup | Moved to background task with 120s timeout; startup completes in seconds |
 | P32 | Dashboard shows static "Exceeds estimation" text | Live count-up timer shows `+Xm Ys over estimate` when print exceeds 100% |
+| P33 | `fetchPrinterStatus` called wrong API path (`/api/v1/printer/status` instead of `/api/v1/system/printer-status`) | Fixed path in `api/index.ts` |
+| P34 | Dashboard JSX structure error — closing `</div>` tags misaligned after edit, breaking build | Fixed JSX nesting; Printer Status card moved outside `{isPrinting && ...}` block as always-visible card |
+| P35 | Summary stats (Total Prints, Total Cost, etc.) on Dashboard — better suited to System page | Moved 6 summary stat cards from Dashboard to System page under "Print Analytics" section |
+| P36 | SpoolmanDB is unmaintained, only ~40 brands / ~1800 flat entries | Replaced with Open Filament Database (OFD): 139 brands, 1978 filaments, 14219 variants, 22238 sizes; bulk `all.json.gz` download on startup, 24h cache, daily refresh |
 
 ---
 

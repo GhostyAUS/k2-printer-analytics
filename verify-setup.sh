@@ -40,6 +40,8 @@ files=(
     "backend/app/api/routes/filament.py"
     "backend/app/api/routes/match_vote.py"
     "backend/app/api/routes/debug.py"
+    "backend/app/api/routes/ofd.py"
+    "backend/app/services/ofd.py"
     "backend/Dockerfile"
     "backend/pyproject.toml"
     "docker-compose.yml"
@@ -58,5 +60,5 @@ done
 
 echo ""
 echo "Project structure verification complete."
-echo "Moonraker host is correctly set to 192.168.1.146 in config.py"
+echo "OFD service and routes are in place"
 echo "PostgreSQL and Alembic configuration is in place"

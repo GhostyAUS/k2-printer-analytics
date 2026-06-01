@@ -102,7 +102,7 @@ const DashboardHelp = () => (
     <Li><strong>Power Monitor</strong> — Real-time wattage graph from your Meross smart plug. Shows live power draw, average watts, and the history over the selected time range. Y-axis shows wattage, X-axis shows time markers.</Li>
     <Li><strong>Summary Cards</strong> — Quick stats for total prints, monthly cost, weekly activity, and filament usage.</Li>
     <Li><strong>CFS Sidebar</strong> — When printing, shows which CFS slot is currently active, its material, color, and remaining weight. Active slot is highlighted. Click to navigate to the Filament Library.</Li>
-    <Li><strong>Print State Row</strong> — When printing, a compact row under the active print card shows State, Speed (%), Flow (%), and Print Time. These auto-hide when the printer is idle.</Li>
+    <Li><strong>Printer Status</strong> — Always-visible card showing State, Speed (%), Flow (%), and Print Time. Displays "N/A" when the printer is idle.</Li>
     <Li><strong>Overtime Counter</strong> — When a print exceeds its estimated time and progress passes 100%, the progress bar turns red and a live count-up timer shows how much over the estimate the print has gone (e.g. "+2m 33s over estimate").</Li>
     <Li><strong>Recent Jobs</strong> — Shows last 8 jobs with thumbnail previews for quick identification.</Li>
     <Li><strong>Print Queue</strong> — Shows queued prints from Moonraker if any jobs are pending.</Li></ul>
@@ -137,7 +137,7 @@ const FilamentHelp = () => (
     <H3>Key Features</H3>
     <ul><Li><strong>Card Grid / Table View</strong> — Toggle between Spoolman-style card grid with SVG progress arcs and a detailed table.</Li>
     <Li><strong>Add Spool</strong> — Manually add a spool with brand, material, color, weight, and cost per kg.</Li>
-    <Li><strong>SpoolmanDB Picker</strong> — Search the SpoolmanDB database of 1800+ filaments to auto-fill brand, material, density, spool weight, and color when adding or editing a spool.</Li>
+    <Li><strong>OFD Catalog Picker</strong> — Search the Open Filament Database (139 brands, 1978 filaments, 14219 variants) to auto-fill brand, material, color name, color hex, and weight when adding or editing a spool. Filter by brand, material, or free-text search. Each result shows color swatch, brand, filament name, variant, material, weight, and temperature range.</Li>
     <Li><strong>Weigh Spool</strong> — Enter the total measured weight (spool + filament on a scale) to precisely calculate remaining filament by subtracting the empty spool weight.</Li>
     <Li><strong>CFS Units Panel</strong> — Compact slot grid per CFS unit (T1–T4) at the top of the page. Each slot shows color swatch, material, remaining % with progress bar, live feeding/loading/standby badges, RFID tag indicator, and override indicator.</Li>
     <Li><strong>Slot Override Modal</strong> — Click any CFS slot to edit override data: material, color, remaining %, spool weight, cost/kg. Use "Reset to CFS" to clear the override. Changes to remaining % automatically recalculate the roll's remaining weight in grams.</Li>
@@ -151,7 +151,7 @@ const FilamentHelp = () => (
     <H3>Remaining Percentage</H3>
     <P>CFS <code className="text-accent-400">remaining_pct</code> is the authoritative source. When a print ends, the system decrements remaining percentage based on actual filament consumed per slot. If you weigh a spool manually, use the Filament Library weigh function to update it precisely. Editing the override remaining % will also recalculate the roll's weight in grams.</P>
     <H3>Data Quality</H3>
-    <P>The system enforces several data quality rules: RFID-tagged spools always get <code className="text-accent-400">brand="Creality"</code>; <code className="text-accent-400">color_name</code> is derived from the hex color code (never from material name); locations use the format <code className="text-accent-400">CFS {slot_id}</code> (e.g. CFS T1A); removed partial rolls are marked <code className="text-accent-400">"Storage box"</code>; new/empty rolls are marked <code className="text-accent-400">"Shelf A"</code>.</P>
+    <P>The system enforces several data quality rules: RFID-tagged spools always get <code className="text-accent-400">brand="Creality"</code>; <code className="text-accent-400">color_name</code> is derived from the hex color code (never from material name); locations use the format <code className="text-accent-400">CFS {'{slot_id}'}</code> (e.g. CFS T1A); removed partial rolls are marked <code className="text-accent-400">"Storage box"</code>; new/empty rolls are marked <code className="text-accent-400">"Shelf A"</code>.</P>
     <H3>Weighing a Spool</H3>
     <P>To weigh: place the spool on a scale, note the total weight, and enter it in the Weigh dialog. The system subtracts the <code className="text-accent-400">spool_weight_g</code> (empty spool tare) to calculate remaining filament. If spool weight is not set, only the total is recorded.</P>
   </div>
@@ -214,11 +214,21 @@ const CompareHelp = () => (
 
 const SystemHelp = () => (
   <div className="card p-6"><H2>System</H2>
-    <P>Shows real-time system health from the printer's Klipper host.</P>
-    <H3>Key Features</H3>
-    <ul><Li><strong>CPU Load</strong> — System load average from the K2's Klipper host.</Li>
-    <Li><strong>Memory</strong> — Available memory on the printer's host.</Li>
-    <Li><strong>Uptime</strong> — How long the Klipper host has been running.</Li></ul>
+    <P>Shows real-time system health from the printer's Klipper host and overall print analytics.</P>
+    <H3>Print Analytics</H3>
+    <ul><Li><strong>Total Prints</strong> — Lifetime print count.</Li>
+    <Li><strong>Total Cost</strong> — Combined power + filament cost across all prints.</Li>
+    <Li><strong>Filament Used</strong> — Total filament consumed in kg.</Li>
+    <Li><strong>Print Hours</strong> — Total printer runtime in hours.</Li>
+    <Li><strong>This Month</strong> — Current month's print count and cost with projected monthly cost.</Li>
+    <Li><strong>Success Rate</strong> — Percentage of completed vs failed/cancelled prints.</Li></ul>
+    <H3>System Sensors</H3>
+    <ul><Li><strong>Temperatures</strong> — Hotend, heated bed, and chamber temperatures with live bars and target markers.</Li>
+    <Li><strong>Fans</strong> — Part cooling, chamber fan, and hotend fan speeds with RPM.</Li>
+    <Li><strong>Board Sensors</strong> — MCU and chamber temperature sensors with min/max ranges.</Li>
+    <Li><strong>System Resources</strong> — CPU load, available memory, and uptime.</Li>
+    <Li><strong>MCU</strong> — Microcontroller model, clock speed, version, and communication stats.</Li>
+    <Li><strong>Print State</strong> — Current idle state, speed factor, flow factor, and print session time.</Li></ul>
   </div>
 )
 

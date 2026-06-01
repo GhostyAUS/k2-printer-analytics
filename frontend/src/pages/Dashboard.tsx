@@ -27,13 +27,6 @@ const Skeleton = ({ className = '' }: { className?: string }) => (
   <div className={`animate-pulse bg-surface-800 rounded ${className}`} />
 )
 
-const StatSkeleton = () => (
-  <div className="card"><div className="card-body">
-    <Skeleton className="h-3 w-16 mb-2" />
-    <Skeleton className="h-6 w-12" />
-  </div></div>
-)
-
 const PowerChart = React.memo(({ history }: { history: { timestamp: string; wattage: number }[] }) => {
   const { avgW, niceMax, yTicks, xTicks } = useMemo(() => {
     const maxW = history.length > 0 ? Math.max(...history.map(p => p.wattage), 1) : 1
@@ -406,74 +399,47 @@ const Dashboard: React.FC = () => {
                 <p className="text-surface-200 font-medium">{meta?.estimated_filament_g ? `${meta.estimated_filament_g.toFixed(0)}g` : '—'}</p>
               </div>
             </div>
-
-            {printerStatus?.print_state && (
-              <div className="mt-4 pt-4 border-t border-surface-700/30 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
-                  <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-surface-500">State</p>
-                    <p className="text-surface-200 font-medium truncate">{printerStatus.print_state.idle_state || '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
-                  <svg className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-surface-500">Speed</p>
-                    <p className="text-surface-200 font-medium">{printerStatus.print_state.speed_factor != null ? `${(printerStatus.print_state.speed_factor * 100).toFixed(0)}%` : '—'}</p>
-                    {printerStatus.print_state.speed_mm_s && <p className="text-[10px] text-surface-500">{(printerStatus.print_state.speed_mm_s / 60).toFixed(0)} mm/s</p>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
-                  <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636" /></svg>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-surface-500">Flow</p>
-                    <p className="text-surface-200 font-medium">{printerStatus.print_state.extrude_factor != null ? `${(printerStatus.print_state.extrude_factor * 100).toFixed(0)}%` : '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
-                  <svg className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-surface-500">Print Time</p>
-                    <p className="text-surface-200 font-medium">{printerStatus.print_state.printing_time ? formatDuration(printerStatus.print_state.printing_time) : '—'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {summary ? (<>
-          <div className="card"><div className="card-body">
-            <span className="stat-label">Total Prints</span>
-            <p className="stat-value">{summary.total_prints ?? '—'}</p>
-          </div></div>
-          <div className="card"><div className="card-body">
-            <span className="stat-label">Total Cost</span>
-            <p className="stat-value text-amber-400">${summary.total_cost?.toFixed(2) ?? '—'}</p>
-          </div></div>
-          <div className="card"><div className="card-body">
-            <span className="stat-label">Filament Used</span>
-            <p className="stat-value text-emerald-400">{summary.total_filament_kg ?? '—'} kg</p>
-          </div></div>
-          <div className="card"><div className="card-body">
-            <span className="stat-label">Print Hours</span>
-            <p className="stat-value text-sky-400">{summary.total_print_hours ?? '—'}h</p>
-          </div></div>
-          <div className="card"><div className="card-body">
-            <span className="stat-label">This Month</span>
-            <p className="stat-value text-violet-400">{summary.month?.prints ?? '—'} prints · ${summary.month?.cost ?? '—'}</p>
-            {summary.month?.projected_monthly_cost > 0 && <p className="text-[10px] text-surface-500 mt-0.5">Projected: ${summary.month.projected_monthly_cost}/mo</p>}
-          </div></div>
-          <div className="card"><div className="card-body">
-            <span className="stat-label">Success Rate</span>
-            <p className="stat-value">{summary.success_rate ?? '—'}%</p>
-          </div></div>
-        </>) : (<>
-          <StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton />
-        </>)}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-white">Printer Status</h2>
+        </div>
+        <div className="card-body">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
+              <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
+              <div className="min-w-0">
+                <p className="text-[10px] text-surface-500">State</p>
+                <p className="text-surface-200 font-medium truncate">{printerStatus?.print_state?.idle_state || 'N/A'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
+              <svg className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
+              <div className="min-w-0">
+                <p className="text-[10px] text-surface-500">Speed</p>
+                <p className="text-surface-200 font-medium">{printerStatus?.print_state?.speed_factor != null ? `${(printerStatus.print_state.speed_factor * 100).toFixed(0)}%` : 'N/A'}</p>
+                {printerStatus?.print_state?.speed_mm_s != null && <p className="text-[10px] text-surface-500">{(printerStatus.print_state.speed_mm_s / 60).toFixed(0)} mm/s</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
+              <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636" /></svg>
+              <div className="min-w-0">
+                <p className="text-[10px] text-surface-500">Flow</p>
+                <p className="text-surface-200 font-medium">{printerStatus?.print_state?.extrude_factor != null ? `${(printerStatus.print_state.extrude_factor * 100).toFixed(0)}%` : 'N/A'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50">
+              <svg className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <div className="min-w-0">
+                <p className="text-[10px] text-surface-500">Print Time</p>
+                <p className="text-surface-200 font-medium">{printerStatus?.print_state?.printing_time ? formatDuration(printerStatus.print_state.printing_time) : 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
